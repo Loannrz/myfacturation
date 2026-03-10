@@ -7,10 +7,7 @@ if (!secret && process.env.NODE_ENV === 'production') {
 
 export const stripe =
   secret ?
-    new Stripe(secret, {
-      apiVersion: '2024-04-10',
-      typescript: true,
-    })
+    new Stripe(secret, { typescript: true })
     : (null as unknown as Stripe)
 
 /** Plan + cycle → Price ID (env: PRICE_PRO_MONTHLY, etc.) */

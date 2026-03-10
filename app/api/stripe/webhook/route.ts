@@ -75,7 +75,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   if (!subscriptionId) return
 
   const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items.data.price'] })
-  const priceId = (sub.items.data[0]?.price as Stripe.Price)?.id
+  const subData = sub as unknown as { current_period_start: number; current_period_end: number; items: { data: Array<{ price?: { id?: string } }> } }
+  const priceId = subData.items.data[0]?.price?.id ?? ''
   const mapping = planFromPriceId(priceId)
   if (!mapping) return
 
@@ -90,14 +91,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       subscriptionStatus: 'active',
       stripeCustomerId: customerId ?? undefined,
       stripeSubscriptionId: subscriptionId,
-      subscriptionStart: new Date(sub.current_period_start * 1000),
-      subscriptionEnd: new Date(sub.current_period_end * 1000),
+      subscriptionStart: new Date(subData.current_period_start * 1000),
+      subscriptionEnd: new Date(subData.current_period_end * 1000),
     },
   })
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
-  const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id
+  const inv = invoice as unknown as { subscription?: string | { id?: string } }
+  const subscriptionId = typeof inv.subscription === 'string' ? inv.subscription : inv.subscription?.id
   if (!subscriptionId) return
 
   const user = await prisma.user.findFirst({
@@ -121,8 +123,9 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
   const userId = sub.metadata?.userId
   if (!userId) return
 
-  const status = sub.status === 'active' ? 'active' : sub.status === 'past_due' ? 'past_due' : 'cancelled'
-  const priceId = (sub.items.data[0]?.price as Stripe.Price)?.id
+  const subData = sub as unknown as { status: string; current_period_start: number; current_period_end: number; items: { data: Array<{ price?: { id?: string } }> } }
+  const status = subData.status === 'active' ? 'active' : subData.status === 'past_due' ? 'past_due' : 'cancelled'
+  const priceId = subData.items.data[0]?.price?.id ?? ''
   const mapping = planFromPriceId(priceId)
 
   const data: {
@@ -134,8 +137,8 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
     planType?: string
   } = {
     subscriptionStatus: status,
-    subscriptionStart: new Date(sub.current_period_start * 1000),
-    subscriptionEnd: new Date(sub.current_period_end * 1000),
+    subscriptionStart: new Date(subData.current_period_start * 1000),
+    subscriptionEnd: new Date(subData.current_period_end * 1000),
   }
   if (mapping && status === 'active') {
     data.subscriptionPlan = mapping.plan

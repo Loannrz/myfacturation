@@ -9,7 +9,7 @@ out
 build
 dist
 
-# Env
+# Env (ne pas ignorer .env.example pour le garder dans le dépôt)
 .env
 .env.local
 .env.development.local
