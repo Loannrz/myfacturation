@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { stripe, getPriceIdForPlan, type StripePlanKey } from '@/lib/stripe'
+import { stripe, getPriceIdForPlan, STRIPE_PRICE_ENV_KEYS, type StripePlanKey } from '@/lib/stripe'
 import { planTypeFromSubscription } from '@/lib/subscription'
 
 export const dynamic = 'force-dynamic'
@@ -25,9 +25,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Plan invalide. Utilisez: pro_monthly, pro_yearly, business_monthly, business_yearly' }, { status: 400 })
     }
 
+    const envKey = STRIPE_PRICE_ENV_KEYS[planKey]
+    const rawPrice = process.env[envKey]?.trim()
+    if (rawPrice?.startsWith('prod_')) {
+      return NextResponse.json({
+        error: 'Stripe attend un Price ID (commençant par price_), pas un Product ID (prod_). Dans le tableau de bord Stripe : Produits → votre produit → section Tarifs → copier l’ID du prix (price_...).',
+      }, { status: 400 })
+    }
     const priceId = getPriceIdForPlan(planKey)
     if (!priceId) {
-      return NextResponse.json({ error: 'Price ID non configuré pour ce plan' }, { status: 400 })
+      return NextResponse.json({ error: 'Price ID non configuré pour ce plan (PRICE_PRO_MONTHLY, PRICE_PRO_YEARLY, etc.)' }, { status: 400 })
     }
 
     const user = await prisma.user.findUnique({
