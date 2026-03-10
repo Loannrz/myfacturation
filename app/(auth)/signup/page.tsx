@@ -16,7 +16,6 @@ export default function SignupPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [skipEmailVerification, setSkipEmailVerification] = useState(false)
-  const [verificationCode, setVerificationCode] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
@@ -40,7 +39,6 @@ export default function SignupPage() {
         setLoading(false)
         return
       }
-      setVerificationCode(data.verificationCode ?? null)
       setSkipEmailVerification(!!data.skipEmailVerification)
       setSuccess(true)
     } catch {
@@ -63,23 +61,9 @@ export default function SignupPage() {
       <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
           <h1 className="text-2xl font-semibold mb-4">Vérifiez votre email</h1>
-          {verificationCode ? (
-            <>
-              <p className="text-[var(--muted)] mb-2">
-                Votre code de vérification à 6 chiffres :
-              </p>
-              <p className="text-2xl font-mono font-bold tracking-widest mb-6 text-[var(--foreground)]">
-                {verificationCode}
-              </p>
-              <p className="text-sm text-[var(--muted)] mb-6">
-                Entrez ce code sur la page suivante pour activer votre compte.
-              </p>
-            </>
-          ) : (
-            <p className="text-[var(--muted)] mb-6">
-              Nous avons envoyé un code de vérification à <strong>{email}</strong>. Entrez-le sur la page suivante (vérifiez aussi les spams).
-            </p>
-          )}
+          <p className="text-[var(--muted)] mb-6">
+            Nous avons envoyé un code de vérification à <strong>{email}</strong>. Entrez-le sur la page suivante (vérifiez aussi les spams).
+          </p>
           <Link
             href={`/verify-email?email=${encodeURIComponent(email)}`}
             className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90 transition-opacity"

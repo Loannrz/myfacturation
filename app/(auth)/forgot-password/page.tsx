@@ -19,7 +19,6 @@ function ForgotPasswordForm() {
   const [code, setCode] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [verificationCode, setVerificationCode] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -41,7 +40,6 @@ function ForgotPasswordForm() {
         setLoading(false)
         return
       }
-      setVerificationCode(data.verificationCode ?? null)
       setStep(2)
     } catch {
       setError('Erreur réseau')
@@ -141,11 +139,6 @@ function ForgotPasswordForm() {
             <p className="text-[var(--muted)] text-sm mb-6">
               Entrez le code reçu par email et choisissez un nouveau mot de passe.
             </p>
-            {verificationCode && (
-              <p className="text-sm mb-4 p-3 rounded-lg bg-[var(--border)]/30">
-                Votre code : <strong className="font-mono text-lg">{verificationCode}</strong>
-              </p>
-            )}
             <form onSubmit={handleResetPassword} className="space-y-4">
               {error && (
                 <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 p-3 rounded-lg">

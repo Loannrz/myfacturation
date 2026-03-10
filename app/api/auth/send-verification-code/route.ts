@@ -47,8 +47,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       message: mailResult.ok
         ? 'Nouveau code envoyé par email (vérifiez aussi les spams).'
-        : 'L’envoi d’email a échoué. Utilisez le code ci-dessous.',
-      verificationCode: code,
+        : 'L’envoi d’email a échoué. Réessayez plus tard.',
     })
   } catch (e) {
     console.error(e)

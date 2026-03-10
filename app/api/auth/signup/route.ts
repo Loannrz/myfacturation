@@ -54,23 +54,20 @@ export async function POST(req: NextRequest) {
     })
 
     let message: string
-    let verificationCode: string | undefined
 
     if (skipVerification) {
       message = 'Compte créé. Vous pouvez vous connecter.'
     } else {
       const mailResult = await sendVerificationCodeEmail(email, code, CODE_EXPIRY_MINUTES)
-      if (!mailResult.ok) verificationCode = code
       message = mailResult.ok
         ? 'Compte créé. Un email avec votre code de vérification a été envoyé (pensez à vérifier les spams).'
-        : 'Compte créé. L’envoi d’email a échoué : utilisez le code ci-dessous pour vérifier votre email.'
+        : 'Compte créé. L’envoi d’email a échoué. Réessayez plus tard ou allez sur la page de vérification pour renvoyer le code.'
     }
 
     return NextResponse.json({
       ok: true,
       message,
       email,
-      ...(verificationCode != null && { verificationCode }),
       skipEmailVerification: skipVerification,
     })
   } catch (e) {
