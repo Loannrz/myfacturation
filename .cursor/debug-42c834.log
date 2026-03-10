@@ -839,3 +839,9 @@
 {"sessionId":"42c834","location":"parametres/page.tsx:initialEffect","message":"parametres initial effect run","data":{"run":2},"timestamp":1773186318349,"hypothesisId":"A"}
 {"sessionId":"42c834","location":"parametres/page.tsx:visibilityEffect","message":"visibility effect run (add listener)","data":{},"timestamp":1773186318349,"hypothesisId":"D"}
 {"sessionId":"42c834","location":"parametres/page.tsx:visibilityEffect","message":"visibility effect run (add listener)","data":{},"timestamp":1773186318352,"hypothesisId":"D"}
+{"sessionId":"42c834","location":"parametres/page.tsx:initialEffect","message":"parametres initial effect run","data":{"run":1},"timestamp":1773186413529,"hypothesisId":"A"}
+{"sessionId":"42c834","location":"parametres/page.tsx:visibilityEffect","message":"visibility effect run (add listener)","data":{},"timestamp":1773186413529,"hypothesisId":"D"}
+{"sessionId":"42c834","location":"layout.tsx:unreadEffect","message":"layout unread-count effect run","data":{"status":"authenticated"},"timestamp":1773186413530,"hypothesisId":"E"}
+{"sessionId":"42c834","location":"layout.tsx:unreadEffect","message":"layout unread-count effect run","data":{"status":"authenticated"},"timestamp":1773186431649,"hypothesisId":"E"}
+{"sessionId":"42c834","location":"parametres/page.tsx:initialEffect","message":"parametres initial effect run","data":{"run":1},"timestamp":1773186439350,"hypothesisId":"A"}
+{"sessionId":"42c834","location":"parametres/page.tsx:visibilityEffect","message":"visibility effect run (add listener)","data":{},"timestamp":1773186439351,"hypothesisId":"D"}

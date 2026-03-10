@@ -44,7 +44,13 @@ export default function FormulesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: planKey }),
       })
-      const data = await res.json()
+      let data: { url?: string; error?: string }
+      try {
+        const text = await res.text()
+        data = text ? JSON.parse(text) : {}
+      } catch {
+        data = { error: res.status === 500 ? 'Erreur serveur. Vérifiez les logs ou la configuration Stripe.' : 'Réponse invalide' }
+      }
       if (data.url) {
         window.location.href = data.url
         return
