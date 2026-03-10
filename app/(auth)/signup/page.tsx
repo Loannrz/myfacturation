@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/app/theme-toggle'
 import { Eye, EyeOff } from 'lucide-react'
 
 export default function SignupPage() {
+  const router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -13,6 +15,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [skipEmailVerification, setSkipEmailVerification] = useState(false)
   const [verificationCode, setVerificationCode] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -38,11 +41,21 @@ export default function SignupPage() {
         return
       }
       setVerificationCode(data.verificationCode ?? null)
+      setSkipEmailVerification(!!data.skipEmailVerification)
       setSuccess(true)
     } catch {
       setError('Une erreur est survenue.')
     }
     setLoading(false)
+  }
+
+  if (success && skipEmailVerification) {
+    router.replace(`/login?registered=1`)
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center px-4">
+        <p className="text-[var(--muted)]">Redirection vers la connexion…</p>
+      </div>
+    )
   }
 
   if (success) {

@@ -82,6 +82,34 @@ model User {
   activityLogs         ActivityLog[]
   billingSettings      BillingSettings?
   billingProducts      BillingProduct[]
+  conversations        Conversation[]
+}
+
+// ——— Support / messagerie interne ———
+model Conversation {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    String    @db.Text
+  status     String    @default("open")   // open | resolved
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  messages   Message[]
+  @@index([userId])
+  @@index([status])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  senderRole     String       // user | admin
+  message        String       @db.Text
+  isRead         Boolean      @default(false)
+  createdAt      DateTime    @default(now())
+  @@index([conversationId])
+  @@index([isRead])
 }
 
 // ——— Admin: plans et permissions ———

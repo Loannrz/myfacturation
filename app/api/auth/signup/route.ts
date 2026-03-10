@@ -39,21 +39,29 @@ export async function POST(req: NextRequest) {
     const hash = await bcrypt.hash(password, 12)
     const code = generateCode()
     const codeExp = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000)
+    const skipVerification = process.env.SKIP_EMAIL_VERIFICATION === 'true' || process.env.SKIP_EMAIL_VERIFICATION === '1'
 
     const user = await prisma.user.create({
       data: {
         email,
         name: name || email.split('@')[0],
         passwordHash: hash,
-        verificationCode: code,
-        verificationCodeExp: codeExp,
+        verificationCode: skipVerification ? null : code,
+        verificationCodeExp: skipVerification ? null : codeExp,
+        emailVerified: skipVerification ? new Date() : undefined,
         planType: 'free',
       },
     })
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const verifyUrl = `${baseUrl}/verify-email?email=${encodeURIComponent(email)}`
-    const html = `
+    let message: string
+    let verificationCode: string | undefined
+
+    if (skipVerification) {
+      message = 'Compte créé. Vous pouvez vous connecter.'
+    } else {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const verifyUrl = `${baseUrl}/verify-email?email=${encodeURIComponent(email)}`
+      const html = `
       <!DOCTYPE html>
       <html><body style="font-family: sans-serif; padding: 20px;">
         <h2>Vérification de votre email – Myfacturation</h2>
@@ -63,24 +71,24 @@ export async function POST(req: NextRequest) {
         <p>Si vous n'avez pas créé de compte, ignorez cet email.</p>
       </body></html>
     `
-    const mailResult = await sendMail({
-      to: email,
-      subject: 'Vérifiez votre email – Myfacturation',
-      html,
-      action: 'signup-verification',
-    })
-
-    // Si l'email n'a pas été envoyé (SMTP non configuré ou erreur), on renvoie le code dans la réponse
-    // pour que l'utilisateur puisse quand même vérifier son compte (affiché sur la page de succès).
-    const verificationCode = !mailResult.ok ? code : undefined
+      const mailResult = await sendMail({
+        to: email,
+        subject: 'Vérifiez votre email – Myfacturation',
+        html,
+        action: 'signup-verification',
+      })
+      if (!mailResult.ok) verificationCode = code
+      message = mailResult.ok
+        ? 'Compte créé. Vérifiez votre email pour le code de vérification (et les spams).'
+        : 'Compte créé. Utilisez le code ci-dessous pour vérifier votre email.'
+    }
 
     return NextResponse.json({
       ok: true,
-      message: mailResult.ok
-        ? 'Compte créé. Vérifiez votre email pour le code de vérification (et les spams).'
-        : 'Compte créé. Utilisez le code ci-dessous pour vérifier votre email.',
+      message,
       email,
       ...(verificationCode != null && { verificationCode }),
+      skipEmailVerification: skipVerification,
     })
   } catch (e) {
     console.error(e)

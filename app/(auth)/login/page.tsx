@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { signIn } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { ThemeToggle } from '@/app/theme-toggle'
 import { Eye, EyeOff } from 'lucide-react'
+
+const EMAIL_NOT_VERIFIED_MSG = 'Veuillez vérifier votre email avant de vous connecter. Si vous venez de créer un compte, entrez le code reçu par email sur la page de vérification (lien ci-dessous).'
 
 function LoginForm() {
   const [email, setEmail] = useState('')
@@ -15,6 +17,15 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+  const registered = searchParams.get('registered') === '1'
+
+  // Afficher l'erreur venant de l'URL (ex. redirection NextAuth après échec)
+  useEffect(() => {
+    const err = searchParams.get('error')
+    if (err === 'CredentialsSignin' || err === 'EMAIL_NOT_VERIFIED') {
+      setError(err === 'EMAIL_NOT_VERIFIED' ? EMAIL_NOT_VERIFIED_MSG : 'Email ou mot de passe incorrect. Si vous venez de créer un compte, vérifiez d\'abord votre email.')
+    }
+  }, [searchParams])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -26,8 +37,9 @@ function LoginForm() {
         password,
         redirect: false,
       })
-      if (res?.error === 'EMAIL_NOT_VERIFIED') {
-        setError('Veuillez vérifier votre email avant de vous connecter. Utilisez le lien ci-dessous pour renvoyer le code.')
+      const err = res?.error ?? ''
+      if (err === 'EMAIL_NOT_VERIFIED' || String(err).includes('EMAIL_NOT_VERIFIED')) {
+        setError(EMAIL_NOT_VERIFIED_MSG)
         setLoading(false)
         return
       }
@@ -38,7 +50,7 @@ function LoginForm() {
       }
       window.location.href = callbackUrl
     } catch {
-      setError('Une erreur est survenue.')
+      setError('Une erreur est survenue. Vérifiez votre connexion.')
       setLoading(false)
     }
   }
@@ -58,10 +70,15 @@ function LoginForm() {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {registered && (
+            <div className="text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 p-3 rounded-lg">
+              Compte créé. Connectez-vous avec votre email et mot de passe.
+            </div>
+          )}
           {error && (
             <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 p-3 rounded-lg">
               <p>{error}</p>
-              {error.includes('vérifier votre email') && email && (
+              {(error.includes('vérifier') || error.includes('vérification')) && email && (
                 <Link
                   href={`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`}
                   className="mt-2 inline-block font-medium underline"

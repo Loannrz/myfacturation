@@ -20,6 +20,7 @@ import {
   Banknote,
   Sparkles,
   Shield,
+  MessageCircle,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { canAccessFeatureByPlan, effectiveSubscriptionPlan } from '@/lib/subscription'
@@ -56,6 +57,11 @@ export default function DashboardLayout({
   const { data: session, status } = useSession()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [messagesUnread, setMessagesUnread] = useState(0)
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    fetch('/api/conversations/unread-count').then((r) => r.json()).then((d) => typeof d.count === 'number' && setMessagesUnread(d.count)).catch(() => {})
+  }, [status])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -123,16 +129,28 @@ export default function DashboardLayout({
             }
             const isActive = pathname === href || (href !== '/dashboard' && pathname?.startsWith(href))
             return (
-              <Link
-                key={key}
-                href={href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                  isActive ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)] hover:bg-[var(--border)]/20 hover:text-[var(--foreground)]'
-                }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                {label}
-              </Link>
+              <span key={key} className="contents">
+                {href === '/formules' && (
+                  <Link
+                    href="/messages"
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                      pathname?.startsWith('/messages') ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)] hover:bg-[var(--border)]/20 hover:text-[var(--foreground)]'
+                    }`}
+                  >
+                    <MessageCircle className="w-4 h-4 shrink-0" />
+                    Envoyer un message{messagesUnread > 0 ? ` (${messagesUnread})` : ''}
+                  </Link>
+                )}
+                <Link
+                  href={href}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                    isActive ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)] hover:bg-[var(--border)]/20 hover:text-[var(--foreground)]'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {label}
+                </Link>
+              </span>
             )
           })}
         </nav>
@@ -194,17 +212,24 @@ export default function DashboardLayout({
                 }
                 const isActive = pathname === href || (href !== '/dashboard' && pathname?.startsWith(href))
                 return (
-                  <Link
-                    key={key}
-                    href={href}
-                    onClick={() => setMobileOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
-                      isActive ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)]'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {label}
-                  </Link>
+                  <span key={key} className="contents">
+                    {href === '/formules' && (
+                      <Link href="/messages" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--foreground)]">
+                        <MessageCircle className="w-4 h-4" />
+                        Envoyer un message{messagesUnread > 0 ? ` (${messagesUnread})` : ''}
+                      </Link>
+                    )}
+                    <Link
+                      href={href}
+                      onClick={() => setMobileOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
+                        isActive ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)]'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </Link>
+                  </span>
                 )
               })}
             </nav>

@@ -72,6 +72,12 @@ Application SaaS de facturation pour indépendants et entreprises. Créez devis 
 
 En production, Vercel injecte les variables d’environnement ; inutile de commiter `.env.local`.
 
+6. **Connexion en production (important)**  
+   - **`NEXTAUTH_URL`** doit être exactement l’URL de ton site en prod (ex. `https://myfacturation360.fr`), sans slash final. Si cette variable est absente ou incorrecte, les cookies de session ne sont pas valides et la connexion échoue.
+   - **`NEXTAUTH_SECRET`** doit être défini (même valeur partout pour cette app). En prod, génère une valeur forte et ajoute-la dans les variables d’environnement Vercel.
+   - **Compte admin** : exécuter le seed sur la base de prod pour créer l’admin (`admin@admin.com`) : `npx prisma db seed` (avec `DATABASE_URL` pointant vers la base de prod).
+   - **Nouveaux comptes sans email** : si en prod tu n’envoies pas d’emails (SMTP non configuré), tu peux définir **`SKIP_EMAIL_VERIFICATION=true`** dans les variables d’environnement Vercel. Les nouveaux inscrits pourront se connecter tout de suite sans vérification par email.
+
 ## Fonctionnalités
 
 - **Landing** : page d'accueil avec CTA Créer un compte / Se connecter
