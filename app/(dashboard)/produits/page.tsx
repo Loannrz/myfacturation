@@ -17,11 +17,12 @@ type Product = {
 }
 
 export default function ProduitsPage() {
-  const { data: session, status } = useSession()
+  const { data: session } = useSession()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [usage, setUsage] = useState<{ productsCount: number; productsLimit: number | null } | null>(null)
   const plan = (session?.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
 
   useEffect(() => {
@@ -35,6 +36,13 @@ export default function ProduitsPage() {
       .finally(() => setLoading(false))
   }, [q, typeFilter])
 
+  useEffect(() => {
+    if (plan !== 'pro' && plan !== 'business') return
+    fetch('/api/usage')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setUsage({ productsCount: data.productsCount ?? 0, productsLimit: data.productsLimit ?? null }))
+  }, [plan])
+
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Supprimer le produit « ${name} » ?`)) return
     const res = await fetch(`/api/products/${id}`, { method: 'DELETE' })
@@ -47,15 +55,31 @@ export default function ProduitsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Produits</h1>
-          <p className="text-[var(--muted)] text-sm mt-1">Préparez des produits à réutiliser dans vos devis et factures</p>
+          <p className="text-[var(--muted)] text-sm mt-1">
+            Préparez des produits à réutiliser dans vos devis et factures
+            {usage && usage.productsLimit != null && (
+              <span className="ml-1">
+                — <strong className="text-[var(--foreground)]">{usage.productsCount}</strong> / {usage.productsLimit} max
+              </span>
+            )}
+          </p>
         </div>
-        <Link
-          href="/produits/nouveau"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90"
-        >
-          <Plus className="w-4 h-4" />
-          Nouveau produit
-        </Link>
+        {usage && usage.productsLimit != null && usage.productsCount >= usage.productsLimit ? (
+          <Link
+            href="/formules"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium"
+          >
+            Limite atteinte — Passer à Business
+          </Link>
+        ) : (
+          <Link
+            href="/produits/nouveau"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90"
+          >
+            <Plus className="w-4 h-4" />
+            Nouveau produit
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-4 mb-6">

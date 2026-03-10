@@ -8,6 +8,8 @@ export type BillingCycle = 'monthly' | 'yearly'
 
 export const INVOICES_LIMIT_STARTER = 5
 export const QUOTES_LIMIT_STARTER = 5
+/** Pro = 5 produits max, Business = illimité */
+export const PRODUCTS_LIMIT_PRO = 5
 
 /** Fonctionnalités débloquées par plan (true = accessible) */
 export const PLAN_FEATURES = {
@@ -51,6 +53,13 @@ export function invoicesLimit(plan: SubscriptionPlan): number | undefined {
 /** Limite de devis ce mois (undefined = illimité) */
 export function quotesLimit(plan: SubscriptionPlan): number | undefined {
   return plan === 'starter' ? QUOTES_LIMIT_STARTER : undefined
+}
+
+/** Limite de produits / services (undefined = illimité). Pro = 5, Business = illimité. */
+export function productsLimit(plan: SubscriptionPlan): number | undefined {
+  if (plan === 'starter') return 0
+  if (plan === 'pro') return PRODUCTS_LIMIT_PRO
+  return undefined
 }
 
 /** Pour compatibilité planType (free/premium) : starter = free, pro/business = premium */

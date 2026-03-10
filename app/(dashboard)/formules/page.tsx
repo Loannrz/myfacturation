@@ -14,7 +14,7 @@ const PRICING = {
 const COMPARISON = [
   { feature: 'Factures par mois', starter: '5', pro: 'Illimité', business: 'Illimité' },
   { feature: 'Devis par mois', starter: '5', pro: 'Illimité', business: 'Illimité' },
-  { feature: 'Produits / Services', starter: false, pro: true, business: true },
+  { feature: 'Produits / Services', starter: false, pro: '5 max', business: 'Illimité' },
   { feature: 'Gestion clients', starter: true, pro: true, business: true },
   { feature: 'Avoirs', starter: false, pro: true, business: true },
   { feature: 'Gestion des dépenses', starter: false, pro: true, business: true },

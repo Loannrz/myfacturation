@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { prisma } from '@/lib/prisma'
+import { canAccessFeatureByPlan } from '@/lib/subscription'
+import { getProductsLimit } from '@/lib/plan-features-db'
+import type { SubscriptionPlan } from '@/lib/subscription'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +26,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+  const plan = (session.subscriptionPlan ?? 'starter') as SubscriptionPlan
+  if (!canAccessFeatureByPlan(plan, 'products')) {
+    return NextResponse.json(
+      { error: 'Les produits sont disponibles à partir de la formule Pro.' },
+      { status: 403 }
+    )
+  }
+
+  const limit = await getProductsLimit(session.subscriptionPlan ?? 'starter')
+  if (limit != null) {
+    const count = await prisma.billingProduct.count({ where: { userId: session.id } })
+    if (count >= limit) {
+      return NextResponse.json(
+        { error: 'Limite de 5 produits atteinte. Passez à Business pour des produits illimités.' },
+        { status: 403 }
+      )
+    }
+  }
+
   try {
     const body = await req.json()
     const product = await prisma.billingProduct.create({

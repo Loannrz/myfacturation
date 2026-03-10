@@ -30,3 +30,10 @@ export async function getQuotesLimit(planKey: string): Promise<number | null> {
   if (limit != null) return limit
   return planKey === 'starter' ? 5 : null
 }
+
+/** Limite de produits pour le plan. Pro = 5, Business = illimité (null). */
+export async function getProductsLimit(planKey: string): Promise<number | null> {
+  const limit = await getPlanFeatureLimit(planKey, 'produits')
+  if (limit != null) return limit
+  return planKey === 'pro' ? 5 : null
+}

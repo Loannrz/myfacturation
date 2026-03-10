@@ -1,15 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { ArrowLeft } from 'lucide-react'
 
 export default function NouveauProduitPage() {
   const router = useRouter()
+  const { data: session } = useSession()
+  const plan = (session?.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
+  const [atLimit, setAtLimit] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (plan !== 'pro' && plan !== 'business') return
+    fetch('/api/usage')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return
+        const limit = data.productsLimit ?? null
+        const count = data.productsCount ?? 0
+        setAtLimit(limit != null && count >= limit)
+      })
+  }, [plan])
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState('service')
@@ -59,11 +75,44 @@ export default function NouveauProduitPage() {
         router.push(`/produits?created=${product.id}`)
       } else {
         const data = await res.json().catch(() => ({}))
-        setError(data.error || 'Erreur lors de la création')
+        if (res.status === 403) {
+          setError(data.error || 'Limite de produits atteinte. Passez à Business pour des produits illimités.')
+        } else {
+          setError(data.error || 'Erreur lors de la création')
+        }
       }
     } finally {
       setLoading(false)
     }
+  }
+
+  if (plan === 'starter') {
+    return (
+      <div className="max-w-xl mx-auto">
+        <Link href="/produits" className="inline-flex items-center gap-2 text-sm text-[var(--muted)] hover:text-[var(--foreground)] mb-6">
+          <ArrowLeft className="w-4 h-4" />
+          Retour aux produits
+        </Link>
+        <p className="text-[var(--muted)]">Les produits sont disponibles à partir de la formule Pro.</p>
+        <Link href="/formules" className="inline-block mt-4 text-sm font-medium text-violet-600 dark:text-violet-400 hover:underline">Voir les formules</Link>
+      </div>
+    )
+  }
+
+  if (atLimit === true) {
+    return (
+      <div className="max-w-xl mx-auto">
+        <Link href="/produits" className="inline-flex items-center gap-2 text-sm text-[var(--muted)] hover:text-[var(--foreground)] mb-6">
+          <ArrowLeft className="w-4 h-4" />
+          Retour aux produits
+        </Link>
+        <div className="p-4 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200">
+          <p className="font-medium">Limite de 5 produits atteinte</p>
+          <p className="text-sm mt-1">Passez à la formule Business pour créer des produits illimités.</p>
+          <Link href="/formules" className="inline-block mt-3 text-sm font-medium underline">Voir les formules</Link>
+        </div>
+      </div>
+    )
   }
 
   return (
