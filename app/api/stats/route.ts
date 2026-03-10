@@ -133,8 +133,9 @@ export async function GET(req: NextRequest) {
     lateInvoices = result[3]
     allCreditNotes = result[4]
     creditNotesPeriod = result[5]
-  } catch {
+  } catch (e) {
     databaseError = true
+    console.error('[api/stats] Database error:', e instanceof Error ? e.message : e)
   }
 
   const today = new Date().toISOString().slice(0, 10)

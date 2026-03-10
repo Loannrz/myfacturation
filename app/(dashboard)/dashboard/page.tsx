@@ -296,11 +296,18 @@ export default function DashboardPage() {
       ) : (
         <>
           {stats.databaseError && (
-            <div className="mb-6 p-4 rounded-xl border border-amber-500/50 bg-amber-500/10 flex items-center gap-3">
+            <div className="mb-6 p-4 rounded-xl border border-amber-500/50 bg-amber-500/10 flex flex-wrap items-center gap-3">
               <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
-              <p className="text-sm text-amber-800 dark:text-amber-200">
+              <p className="text-sm text-amber-800 dark:text-amber-200 flex-1 min-w-0">
                 La base de données est temporairement indisponible. Les statistiques affichées sont vides. Vérifiez votre connexion ou réessayez plus tard.
               </p>
+              <button
+                type="button"
+                onClick={() => fetchStats()}
+                className="shrink-0 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-amber-50 text-sm font-medium transition-colors"
+              >
+                Réessayer
+              </button>
             </div>
           )}
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
-import { sendMail } from '@/lib/smtp'
+import { sendVerificationCodeEmail } from '@/utils/sendVerificationCodeEmail'
 
 const CODE_LENGTH = 6
 const CODE_EXPIRY_MINUTES = 15
@@ -59,28 +59,11 @@ export async function POST(req: NextRequest) {
     if (skipVerification) {
       message = 'Compte créé. Vous pouvez vous connecter.'
     } else {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-      const verifyUrl = `${baseUrl}/verify-email?email=${encodeURIComponent(email)}`
-      const html = `
-      <!DOCTYPE html>
-      <html><body style="font-family: sans-serif; padding: 20px;">
-        <h2>Vérification de votre email – Myfacturation</h2>
-        <p>Votre code de vérification : <strong>${code}</strong></p>
-        <p>Ce code expire dans ${CODE_EXPIRY_MINUTES} minutes.</p>
-        <p>Vous pouvez aussi <a href="${verifyUrl}">cliquer ici</a> pour entrer le code sur le site.</p>
-        <p>Si vous n'avez pas créé de compte, ignorez cet email.</p>
-      </body></html>
-    `
-      const mailResult = await sendMail({
-        to: email,
-        subject: 'Vérifiez votre email – Myfacturation',
-        html,
-        action: 'signup-verification',
-      })
+      const mailResult = await sendVerificationCodeEmail(email, code, CODE_EXPIRY_MINUTES)
       if (!mailResult.ok) verificationCode = code
       message = mailResult.ok
-        ? 'Compte créé. Vérifiez votre email pour le code de vérification (et les spams).'
-        : 'Compte créé. Utilisez le code ci-dessous pour vérifier votre email.'
+        ? 'Compte créé. Un email avec votre code de vérification a été envoyé (pensez à vérifier les spams).'
+        : 'Compte créé. L’envoi d’email a échoué : utilisez le code ci-dessous pour vérifier votre email.'
     }
 
     return NextResponse.json({

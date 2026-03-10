@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { sendMail } from '@/lib/smtp'
+import { sendVerificationCodeEmail } from '@/utils/sendVerificationCodeEmail'
 
 const CODE_LENGTH = 6
 const CODE_EXPIRY_MINUTES = 15
@@ -41,30 +41,13 @@ export async function POST(req: NextRequest) {
       data: { verificationCode: code, verificationCodeExp: codeExp },
     })
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const verifyUrl = `${baseUrl}/verify-email?email=${encodeURIComponent(email)}`
-    const html = `
-      <!DOCTYPE html>
-      <html><body style="font-family: sans-serif; padding: 20px;">
-        <h2>Nouveau code – Myfacturation</h2>
-        <p>Votre code : <strong>${code}</strong></p>
-        <p>Expire dans ${CODE_EXPIRY_MINUTES} minutes.</p>
-        <p><a href="${verifyUrl}">Entrer le code</a></p>
-      </body></html>
-    `
-    const mailResult = await sendMail({
-      to: email,
-      subject: 'Votre code de vérification – Myfacturation',
-      html,
-      action: 'resend-verification',
-    })
+    const mailResult = await sendVerificationCodeEmail(email, code, CODE_EXPIRY_MINUTES)
 
-    // Toujours renvoyer le code pour l'afficher sur la page (au cas où l'email n'arrive pas ou part en spam)
     return NextResponse.json({
       ok: true,
       message: mailResult.ok
-        ? 'Nouveau code envoyé par email. S\'il n\'apparaît pas, utilisez le code ci-dessous.'
-        : 'Email non configuré ou en erreur. Utilisez le code ci-dessous.',
+        ? 'Nouveau code envoyé par email (vérifiez aussi les spams).'
+        : 'L’envoi d’email a échoué. Utilisez le code ci-dessous.',
       verificationCode: code,
     })
   } catch (e) {
