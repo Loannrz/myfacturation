@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Plus, Trash2, Sparkles, Lock } from 'lucide-react'
 import { planLabel, canAccessFeatureByPlan, maxEstablishments, maxBankAccounts } from '@/lib/subscription'
 
@@ -32,6 +33,11 @@ const LEGAL_FORMS = [
   'SCOP',
   'Autre',
 ]
+
+// Un seul chargement initial par onglet : évite la boucle même si le composant remonte (Strict Mode, layout, etc.)
+let parametresInitialFetchDone = false
+let parametresResetTimeoutId: ReturnType<typeof setTimeout> | null = null
+let parametresCachedResult: { user: Record<string, unknown>; settings: Record<string, unknown> } | null = null
 
 export default function ParametresPage() {
   const [profile, setProfile] = useState<{
@@ -68,45 +74,120 @@ export default function ParametresPage() {
   const [changeEmailCodeDisplay, setChangeEmailCodeDisplay] = useState<string | null>(null)
   const [subscriptionPlan, setSubscriptionPlan] = useState<'starter' | 'pro' | 'business'>('starter')
   const searchParams = useSearchParams()
+  const { data: session, update: updateSession } = useSession()
+  const initialEffectRuns = useRef(0)
+  const visibilityHandlerRuns = useRef(0)
+  const lastSyncedPlanRef = useRef<string | null>(null)
+
+  const syncPlanFromUser = useCallback((user: { subscriptionPlan?: string; billingCycle?: string | null; email?: string; name?: string; phone?: string }) => {
+    const plan = user.subscriptionPlan ?? 'starter'
+    const planVal = plan === 'pro' || plan === 'business' ? plan : 'starter'
+    setSubscriptionPlan(planVal)
+    updateSession?.({ subscriptionPlan: planVal, billingCycle: user.billingCycle ?? null }).catch(() => {})
+    const email = user.email ?? ''
+    setAccountEmail(email)
+    setProfile({
+      name: user.name ?? '',
+      email,
+      phone: user.phone ?? '',
+    })
+  }, [updateSession])
+
+  const applyMeAndSettings = useCallback((user: Record<string, unknown>, settings: Record<string, unknown>) => {
+    const plan = (user.subscriptionPlan as string) ?? 'starter'
+    const planVal = (plan === 'pro' || plan === 'business' ? plan : 'starter') as 'starter' | 'pro' | 'business'
+    setSubscriptionPlan(planVal)
+    lastSyncedPlanRef.current = planVal
+    setAccountEmail((user.email as string) ?? '')
+    setProfile({ name: (user.name as string) ?? '', email: (user.email as string) ?? '', phone: (user.phone as string) ?? '' })
+    const emitters = Array.isArray(settings.emitterProfiles) ? settings.emitterProfiles : []
+    if (emitters.length > 0) {
+      setEmitterProfiles(emitters.map((e: EmitterProfileEntry) => ({ ...newEmitterProfile(), ...e, id: (e.id as string) || crypto.randomUUID() })))
+    } else if (settings.companyName || settings.siret) {
+      setEmitterProfiles([{ ...newEmitterProfile(), name: 'Établissement principal', companyName: (settings.companyName as string) ?? '', legalStatus: (settings.legalStatus as string) ?? '', siret: (settings.siret as string) ?? '', address: (settings.address as string) ?? '', postalCode: (settings.postalCode as string) ?? '', city: (settings.city as string) ?? '' }])
+    }
+    const accounts = Array.isArray(settings.bankAccounts) ? settings.bankAccounts : []
+    setBankAccounts(accounts.length > 0 ? accounts.map((a: BankAccountEntry) => ({ ...newBankAccount(), ...a, id: (a.id as string) || crypto.randomUUID() })) : [])
+    setInvoiceNumberMiddle((settings.invoiceNumberMiddle as string) ?? '')
+    setInvoiceNumberFormat((settings.invoiceNumberFormat as string) ?? 'sequential')
+    setQuoteNumberMiddle((settings.quoteNumberMiddle as string) ?? '')
+    setQuoteNumberFormat((settings.quoteNumberFormat as string) ?? 'sequential')
+    setCreditNumberMiddle((settings.creditNumberMiddle as string) ?? '')
+    setCreditNumberFormat((settings.creditNumberFormat as string) ?? 'sequential')
+    setInvoicePrefix((settings.invoicePrefix as string) ?? 'F')
+    setQuotePrefix((settings.quotePrefix as string) ?? 'D')
+    setCreditNotePrefix((settings.creditNotePrefix as string) ?? 'A')
+    setDefaultPaymentMethod((settings.defaultPaymentMethod as string) ?? '')
+    const terms = (settings.defaultPaymentTerms as string) ?? ''
+    const termsMatch = ['15 jours', '30 jours', '60 jours', '90 jours'].find((t) => terms.includes(t.split(' ')[0]))
+    setDefaultPaymentTerms(termsMatch ?? '')
+    setLegalPenaltiesText((settings.legalPenaltiesText as string) ?? '')
+    setLegalRecoveryFeeText((settings.legalRecoveryFeeText as string) ?? '')
+  }, [])
 
   useEffect(() => {
+    if (parametresResetTimeoutId) {
+      clearTimeout(parametresResetTimeoutId)
+      parametresResetTimeoutId = null
+    }
+    if (parametresInitialFetchDone && parametresCachedResult) {
+      applyMeAndSettings(parametresCachedResult.user, parametresCachedResult.settings)
+      return
+    }
+    if (parametresInitialFetchDone && !parametresCachedResult) {
+      parametresInitialFetchDone = false
+    }
+    if (parametresInitialFetchDone) return
+    parametresInitialFetchDone = true
+    // #region agent log
+    initialEffectRuns.current += 1
+    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'parametres/page.tsx:initialEffect',message:'parametres initial effect run',data:{run:initialEffectRuns.current},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    let cancelled = false
     Promise.all([fetch('/api/me').then((r) => r.json()), fetch('/api/settings').then((r) => r.json())])
       .then(([user, settings]) => {
-        const email = user.email ?? ''
-        setAccountEmail(email)
-        setProfile({
-          name: user.name ?? '',
-          email,
-          phone: user.phone ?? '',
-        })
-        const plan = user.subscriptionPlan ?? 'starter'
-        setSubscriptionPlan(plan === 'pro' || plan === 'business' ? plan : 'starter')
-        const emitters = Array.isArray(settings.emitterProfiles) ? settings.emitterProfiles : []
-        if (emitters.length > 0) {
-          setEmitterProfiles(emitters.map((e: EmitterProfileEntry) => ({ ...newEmitterProfile(), ...e, id: e.id || crypto.randomUUID() })))
-        } else if (settings.companyName || settings.siret) {
-          setEmitterProfiles([{ ...newEmitterProfile(), name: 'Établissement principal', companyName: settings.companyName ?? '', legalStatus: settings.legalStatus ?? '', siret: settings.siret ?? '', address: settings.address ?? '', postalCode: settings.postalCode ?? '', city: settings.city ?? '' }])
-        }
-        const accounts = Array.isArray(settings.bankAccounts) ? settings.bankAccounts : []
-        setBankAccounts(accounts.length > 0 ? accounts.map((a: BankAccountEntry) => ({ ...newBankAccount(), ...a, id: a.id || crypto.randomUUID() })) : [])
-        setInvoiceNumberMiddle(settings.invoiceNumberMiddle ?? '')
-        setInvoiceNumberFormat(settings.invoiceNumberFormat ?? 'sequential')
-        setQuoteNumberMiddle(settings.quoteNumberMiddle ?? '')
-        setQuoteNumberFormat(settings.quoteNumberFormat ?? 'sequential')
-        setCreditNumberMiddle(settings.creditNumberMiddle ?? '')
-        setCreditNumberFormat(settings.creditNumberFormat ?? 'sequential')
-        setInvoicePrefix(settings.invoicePrefix ?? 'F')
-        setQuotePrefix(settings.quotePrefix ?? 'D')
-        setCreditNotePrefix(settings.creditNotePrefix ?? 'A')
-        setDefaultPaymentMethod(settings.defaultPaymentMethod ?? '')
-        const terms = settings.defaultPaymentTerms ?? ''
-        const termsMatch = ['15 jours', '30 jours', '60 jours', '90 jours'].find((t) => terms.includes(t.split(' ')[0]))
-        setDefaultPaymentTerms(termsMatch ?? '')
-        setLegalPenaltiesText(settings.legalPenaltiesText ?? '')
-        setLegalRecoveryFeeText(settings.legalRecoveryFeeText ?? '')
+        if (cancelled) return
+        parametresCachedResult = { user: user as Record<string, unknown>, settings: settings as Record<string, unknown> }
+        applyMeAndSettings(user as Record<string, unknown>, settings as Record<string, unknown>)
       })
-      .catch(() => setProfile({}))
+      .catch(() => { if (!cancelled) setProfile({}) })
+    return () => {
+      cancelled = true
+      parametresResetTimeoutId = setTimeout(() => {
+        parametresInitialFetchDone = false
+        parametresCachedResult = null
+        parametresResetTimeoutId = null
+      }, 150)
+    }
+    // Chargement initial une seule fois au montage pour éviter une boucle (updateSession peut changer après mise à jour)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    const onVisible = () => {
+      visibilityHandlerRuns.current += 1
+      // #region agent log
+      fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'parametres/page.tsx:visibilityHandler',message:'visibilitychange fired',data:{run:visibilityHandlerRuns.current},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      fetch('/api/me')
+        .then((r) => r.json())
+        .then((user) => {
+          const plan = user.subscriptionPlan ?? 'starter'
+          const planVal = plan === 'pro' || plan === 'business' ? plan : 'starter'
+          setSubscriptionPlan(planVal)
+          if (planVal !== lastSyncedPlanRef.current) {
+            lastSyncedPlanRef.current = planVal
+            updateSession?.({ subscriptionPlan: planVal, billingCycle: user.billingCycle ?? null }).catch(() => {})
+          }
+        })
+        .catch(() => {})
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'parametres/page.tsx:visibilityEffect',message:'visibility effect run (add listener)',data:{},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [updateSession])
 
   useEffect(() => {
     const upgraded = searchParams.get('upgraded')

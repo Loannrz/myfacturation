@@ -22,7 +22,7 @@ import {
   Shield,
   MessageCircle,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { canAccessFeatureByPlan, effectiveSubscriptionPlan } from '@/lib/subscription'
 import { ThemeToggle } from '@/app/theme-toggle'
 
@@ -58,8 +58,14 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [messagesUnread, setMessagesUnread] = useState(0)
+  const hasBeenAuthenticated = useRef(false)
+  if (status === 'authenticated' && session) hasBeenAuthenticated.current = true
+
   useEffect(() => {
     if (status !== 'authenticated') return
+    // #region agent log
+    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'layout.tsx:unreadEffect',message:'layout unread-count effect run',data:{status},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     fetch('/api/conversations/unread-count').then((r) => r.json()).then((d) => typeof d.count === 'number' && setMessagesUnread(d.count)).catch(() => {})
   }, [status])
 
@@ -69,7 +75,10 @@ export default function DashboardLayout({
     }
   }, [status, pathname])
 
-  if (status === 'loading' || !session) {
+  // Ne pas démonter le contenu lors d'un refetch session (évite la boucle sur Paramètres).
+  // Afficher "Chargement" uniquement au tout premier chargement, pas quand on a déjà été authentifié.
+  const showContent = hasBeenAuthenticated.current || (status === 'authenticated' && session)
+  if (!showContent) {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <div className="text-[var(--muted)]">Chargement…</div>
@@ -77,9 +86,10 @@ export default function DashboardLayout({
     )
   }
 
-  const planType = (session.user as { planType?: string })?.planType ?? 'free'
-  const subscriptionPlan = (session.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
-  const role = (session.user as { role?: string })?.role ?? 'user'
+  const currentSession = session ?? undefined
+  const planType = (currentSession?.user as { planType?: string })?.planType ?? 'free'
+  const subscriptionPlan = (currentSession?.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
+  const role = (currentSession?.user as { role?: string })?.role ?? 'user'
   const effectivePlan = effectiveSubscriptionPlan(subscriptionPlan as 'starter' | 'pro' | 'business', role)
 
   const isLocked = (item: NavItem) => {

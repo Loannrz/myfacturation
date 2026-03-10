@@ -33,6 +33,7 @@ export default function ProduitsPage() {
     fetch(`/api/products?${params}`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setProducts)
+      .catch(() => setProducts([]))
       .finally(() => setLoading(false))
   }, [q, typeFilter])
 
@@ -41,6 +42,7 @@ export default function ProduitsPage() {
     fetch('/api/usage')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => data && setUsage({ productsCount: data.productsCount ?? 0, productsLimit: data.productsLimit ?? null }))
+      .catch(() => {})
   }, [plan])
 
   const handleDelete = async (id: string, name: string) => {

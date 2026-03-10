@@ -8,15 +8,22 @@ import { useEffect, useState } from 'react'
 
 export default function BillingSuccessPage() {
   const searchParams = useSearchParams()
-  const { data: session, status } = useSession()
+  const { status, update: updateSession } = useSession()
   const [refreshed, setRefreshed] = useState(false)
   const sessionId = searchParams.get('session_id')
 
   useEffect(() => {
     if (status !== 'authenticated' || !sessionId || refreshed) return
-    // Forcer un refresh de la session pour mettre à jour le plan
-    fetch('/api/auth/session?update').then(() => setRefreshed(true))
-  }, [status, sessionId, refreshed])
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((user) => {
+        const plan = user.subscriptionPlan ?? 'starter'
+        const planVal = plan === 'pro' || plan === 'business' ? plan : 'starter'
+        return updateSession?.({ subscriptionPlan: planVal, billingCycle: user.billingCycle ?? null })
+      })
+      .then(() => setRefreshed(true))
+      .catch(() => setRefreshed(true))
+  }, [status, sessionId, refreshed, updateSession])
 
   return (
     <div className="max-w-lg mx-auto text-center py-16 px-4">

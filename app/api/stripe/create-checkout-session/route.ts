@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     metadata: { userId: session.id, planKey },
     subscription_data: {
       metadata: { userId: session.id, planKey },
-      trial_period_days: undefined,
+      trial_period_days: 7,
     },
   })
 

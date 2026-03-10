@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { CreditCard, Calendar, RefreshCw, XCircle } from 'lucide-react'
+import { CreditCard, Calendar, RefreshCw, XCircle, ExternalLink } from 'lucide-react'
 import { planLabel } from '@/lib/subscription'
 
 type BillingData = {
@@ -20,6 +20,7 @@ export default function SettingsBillingPage() {
   const [loading, setLoading] = useState(true)
   const [changingPlan, setChangingPlan] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [portalLoading, setPortalLoading] = useState(false)
 
   useEffect(() => {
     if (status !== 'authenticated') return
@@ -43,8 +44,25 @@ export default function SettingsBillingPage() {
     window.location.href = '/formules'
   }
 
+  const handleOpenStripePortal = async () => {
+    setPortalLoading(true)
+    try {
+      const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
+      alert(data.error || 'Impossible d\'ouvrir le portail de facturation')
+    } catch {
+      alert('Erreur')
+    } finally {
+      setPortalLoading(false)
+    }
+  }
+
   const handleCancelSubscription = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir annuler votre abonnement ? Vous repasserez sur la formule Starter à la fin de la période payée.')) return
+    if (!confirm('Êtes-vous sûr de vouloir annuler votre abonnement ? Vous repasserez sur la formule Starter à la fin de la période payée (ou à la fin de votre essai gratuit).')) return
     setCancelling(true)
     try {
       const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' })
@@ -127,17 +145,31 @@ export default function SettingsBillingPage() {
             {changingPlan ? 'Redirection…' : 'Changer de plan'}
           </button>
           {hasActiveStripeSubscription && (
-            <button
-              type="button"
-              onClick={handleCancelSubscription}
+            <>
+              <button
+                type="button"
+                onClick={handleOpenStripePortal}
+                disabled={!!portalLoading}
+                className="inline-flex items-center gap-2 justify-center px-4 py-2.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--border)]/20 font-medium text-sm disabled:opacity-50"
+              >
+                <ExternalLink className="w-4 h-4" />
+                {portalLoading ? 'Ouverture…' : 'Gérer mon abonnement (Stripe)'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelSubscription}
               disabled={!!cancelling}
               className="inline-flex items-center gap-2 justify-center px-4 py-2.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--border)]/20 font-medium text-sm disabled:opacity-50"
             >
               <XCircle className="w-4 h-4" />
-              {cancelling ? 'Annulation…' : 'Annuler l’abonnement'}
+              {cancelling ? 'Annulation…' : 'Résilier à la fin de la période'}
             </button>
+            </>
           )}
         </div>
+        <p className="text-xs text-[var(--muted)] mt-3">
+          Sur le portail Stripe vous pouvez résilier, changer de moyen de paiement ou consulter vos factures.
+        </p>
       </div>
 
       <p className="mt-6 text-sm text-[var(--muted)]">

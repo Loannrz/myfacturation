@@ -4,6 +4,8 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { planTypeFromSubscription } from '@/lib/subscription'
+import type { SubscriptionPlan } from '@/lib/subscription'
 import path from 'path'
 import fs from 'fs'
 
@@ -168,7 +170,11 @@ export const authOptions: NextAuthOptions = {
       if (trigger === 'update' && session) {
         token.name = session.name
         token.picture = session.image
-        if ((session as { subscriptionPlan?: string }).subscriptionPlan != null) token.subscriptionPlan = (session as { subscriptionPlan: string }).subscriptionPlan
+        if ((session as { subscriptionPlan?: string }).subscriptionPlan != null) {
+          const plan = (session as { subscriptionPlan: string }).subscriptionPlan as SubscriptionPlan
+          token.subscriptionPlan = plan
+          token.planType = planTypeFromSubscription(plan)
+        }
         if ((session as { billingCycle?: string | null }).billingCycle !== undefined) token.billingCycle = (session as { billingCycle: string | null }).billingCycle
       }
       return token

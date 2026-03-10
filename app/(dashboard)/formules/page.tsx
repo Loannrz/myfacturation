@@ -12,6 +12,7 @@ const PRICING = {
 } as const
 
 const COMPARISON = [
+  { feature: 'Essai gratuit', starter: false, pro: '7 jours', business: '7 jours' },
   { feature: 'Factures par mois', starter: '5', pro: 'Illimité', business: 'Illimité' },
   { feature: 'Devis par mois', starter: '5', pro: 'Illimité', business: 'Illimité' },
   { feature: 'Produits / Services', starter: false, pro: '5 max', business: 'Illimité' },
@@ -48,15 +49,19 @@ export default function FormulesPage() {
         window.location.href = data.url
         return
       }
-      if (res.status === 503 || (data.error && data.error.includes('Stripe'))) {
-        // Fallback démo sans Stripe : mise à jour manuelle
-        const fallback = await fetch('/api/subscription', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subscriptionPlan: plan, billingCycle: yearly ? 'yearly' : 'monthly' }),
-        })
-        if (fallback.ok) window.location.href = '/parametres?upgraded=' + plan
-        else setLoading(null)
+      if (res.status === 503) {
+        const isLocalhost = typeof window !== 'undefined' && /^localhost$|^127\.0\.0\.1$/.test(window.location.hostname)
+        if (isLocalhost) {
+          const fallback = await fetch('/api/subscription', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscriptionPlan: plan, billingCycle: yearly ? 'yearly' : 'monthly' }),
+          })
+          if (fallback.ok) window.location.href = '/parametres?upgraded=' + plan
+        } else {
+          alert('Le paiement en ligne n\'est pas configuré. Vérifiez STRIPE_SECRET_KEY et les Price IDs (PRICE_PRO_MONTHLY, etc.) dans les variables d\'environnement.')
+        }
+        setLoading(null)
         return
       }
       if (!res.ok) {
@@ -153,6 +158,7 @@ export default function FormulesPage() {
           </div>
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-[var(--foreground)]">Pro</h3>
+            <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mt-1">7 jours d&apos;essai gratuit</p>
             <div className="mt-2">
               <span className="text-3xl font-bold text-[var(--foreground)]">
                 {yearly ? (PRICING.pro.yearly / 12).toFixed(2).replace('.', ',') : PRICING.pro.monthly} €
@@ -185,6 +191,7 @@ export default function FormulesPage() {
           </div>
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-[var(--foreground)]">Business</h3>
+            <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mt-1">7 jours d&apos;essai gratuit</p>
             <div className="mt-2">
               <span className="text-3xl font-bold text-[var(--foreground)]">
                 {yearly ? (PRICING.business.yearly / 12).toFixed(2).replace('.', ',') : PRICING.business.monthly} €
