@@ -11,9 +11,9 @@ type BillingCycle = 'monthly' | 'yearly'
 /** GET: retourne la formule et le cycle de facturation de l'utilisateur */
 export async function GET() {
   const session = await requireSession()
-  if (!session?.user?.id) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!session?.id) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: session.id },
     select: { subscriptionPlan: true, billingCycle: true },
   })
   if (!user) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 })
@@ -26,7 +26,7 @@ export async function GET() {
 /** PATCH: met à jour la formule (pour démo / upgrade manuel) */
 export async function PATCH(req: NextRequest) {
   const session = await requireSession()
-  if (!session?.user?.id) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!session?.id) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   try {
     const body = await req.json()
     const plan = (body.subscriptionPlan as SubscriptionPlan) || undefined
@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest) {
     }
     const planType = planTypeFromSubscription(plan)
     await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: session.id },
       data: {
         subscriptionPlan: plan,
         ...(cycle && ['monthly', 'yearly'].includes(cycle) ? { billingCycle: cycle } : {}),

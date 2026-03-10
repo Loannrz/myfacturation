@@ -51,22 +51,23 @@ export async function PATCH(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Non autorisé' }, { status: 403 })
 
   const body = await req.json()
-  const { planKey, feature, enabled, limit } = body as { planKey: string; feature: string; enabled?: boolean; limit?: number | null }
+  const { planKey, feature, enabled, limit } = body as { planKey: string; feature: string; enabled?: boolean; limit?: number | string | null }
   if (!planKey || !feature || !['starter', 'pro', 'business'].includes(planKey)) {
     return NextResponse.json({ error: 'Paramètres invalides' }, { status: 400 })
   }
 
+  const limitVal = limit === undefined || limit === null || limit === '' ? null : Number(limit)
   const pf = await prisma.planFeature.upsert({
     where: { planKey_feature: { planKey, feature } },
     update: {
       ...(enabled !== undefined && { enabled }),
-      ...(limit !== undefined && { limit_: limit === null || limit === '' ? null : Number(limit) }),
+      ...(limit !== undefined && { limit_: limitVal }),
     },
     create: {
       planKey,
       feature,
       enabled: enabled ?? true,
-      limit_: limit == null || limit === '' ? null : Number(limit),
+      limit_: limitVal,
     },
   })
   return NextResponse.json(pf)

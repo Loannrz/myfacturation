@@ -102,10 +102,12 @@ export async function PUT(
   const newVatAmount = Math.round(vatAmount * 100) / 100
   const newTotalTTC = Math.round((totalHT + vatAmount) * 100) / 100
 
+  const dueDateStr = (d: Date | string | null | undefined) =>
+    d == null ? null : typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)
   const changes: { field: string; oldValue: string | number; newValue: string | number }[] = []
   if (existing.status !== body.status) changes.push({ field: 'Statut', oldValue: existing.status, newValue: body.status ?? '' })
   if (existing.issueDate !== body.issueDate) changes.push({ field: 'Date d\'émission', oldValue: existing.issueDate, newValue: body.issueDate ?? '' })
-  if ((existing.dueDate?.toISOString().slice(0, 10) ?? null) !== (body.dueDate ?? null)) changes.push({ field: 'Date d\'échéance', oldValue: existing.dueDate?.toISOString().slice(0, 10) ?? '—', newValue: body.dueDate ?? '—' })
+  if ((dueDateStr(existing.dueDate) ?? null) !== (body.dueDate ?? null)) changes.push({ field: 'Date d\'échéance', oldValue: dueDateStr(existing.dueDate) ?? '—', newValue: body.dueDate ?? '—' })
   if (existing.paymentMethod !== (body.paymentMethod ?? null)) changes.push({ field: 'Mode de paiement', oldValue: existing.paymentMethod ?? '—', newValue: body.paymentMethod ?? '—' })
   if (existing.paymentTerms !== (body.paymentTerms ?? null)) changes.push({ field: 'Conditions de paiement', oldValue: existing.paymentTerms ?? '—', newValue: body.paymentTerms ?? '—' })
   if (Number(existing.totalHT) !== newTotalHT) changes.push({ field: 'Total HT', oldValue: Number(existing.totalHT), newValue: newTotalHT })

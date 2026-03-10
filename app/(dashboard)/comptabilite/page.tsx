@@ -128,11 +128,11 @@ function RevenueVsExpensesTooltip({
   label,
 }: {
   active?: boolean
-  payload?: Array<{ value: number; name: string; dataKey: string }>
+  payload?: Array<{ value: number; name: string; dataKey: string; payload?: RevenueVsExpensesPoint }>
   label?: string
 }) {
   if (!active || !payload?.length || !label) return null
-  const point = payload[0]?.payload as RevenueVsExpensesPoint | undefined
+  const point = payload[0]?.payload
   if (!point) return null
   const net = point.revenue - point.expenses
   return (

@@ -296,19 +296,19 @@ export async function updateBillingSettings(
   if (Array.isArray(emitterProfiles)) {
     (updateData as { emitterProfiles?: string }).emitterProfiles = JSON.stringify(emitterProfiles)
   }
-  if (data.invoiceNumberMiddle !== undefined) (updateData as { invoiceNumberMiddle?: string }).invoiceNumberMiddle = data.invoiceNumberMiddle === '' ? null : sanitizeMiddle(data.invoiceNumberMiddle, 6) || null
-  if (data.invoiceNumberFormat !== undefined) (updateData as { invoiceNumberFormat?: string }).invoiceNumberFormat = data.invoiceNumberFormat || null
-  if (data.invoicePrefix !== undefined) (updateData as { invoicePrefix?: string }).invoicePrefix = (data.invoicePrefix ?? '').trim().slice(0, 4) || null
-  if (data.quoteNumberMiddle !== undefined) (updateData as { quoteNumberMiddle?: string }).quoteNumberMiddle = data.quoteNumberMiddle === '' ? null : sanitizeMiddle(data.quoteNumberMiddle, 6) || null
-  if (data.quoteNumberFormat !== undefined) (updateData as { quoteNumberFormat?: string }).quoteNumberFormat = data.quoteNumberFormat || null
-  if (data.quotePrefix !== undefined) (updateData as { quotePrefix?: string }).quotePrefix = (data.quotePrefix ?? '').trim().slice(0, 4) || null
-  if (data.creditNumberMiddle !== undefined) (updateData as { creditNumberMiddle?: string }).creditNumberMiddle = data.creditNumberMiddle === '' ? null : sanitizeMiddle(data.creditNumberMiddle, 6) || null
-  if (data.creditNumberFormat !== undefined) (updateData as { creditNumberFormat?: string }).creditNumberFormat = data.creditNumberFormat || null
-  if (data.creditNotePrefix !== undefined) (updateData as { creditNotePrefix?: string }).creditNotePrefix = (data.creditNotePrefix ?? '').trim().slice(0, 4) || null
-  if (data.defaultPaymentMethod !== undefined) (updateData as { defaultPaymentMethod?: string }).defaultPaymentMethod = data.defaultPaymentMethod || null
-  if (data.defaultPaymentTerms !== undefined) (updateData as { defaultPaymentTerms?: string }).defaultPaymentTerms = data.defaultPaymentTerms || null
-  if (data.legalPenaltiesText !== undefined) (updateData as { legalPenaltiesText?: string }).legalPenaltiesText = data.legalPenaltiesText || null
-  if (data.legalRecoveryFeeText !== undefined) (updateData as { legalRecoveryFeeText?: string }).legalRecoveryFeeText = data.legalRecoveryFeeText || null
+  if (data.invoiceNumberMiddle !== undefined) (updateData as { invoiceNumberMiddle?: string | null }).invoiceNumberMiddle = data.invoiceNumberMiddle === '' ? null : sanitizeMiddle(data.invoiceNumberMiddle, 6) || null
+  if (data.invoiceNumberFormat !== undefined) (updateData as { invoiceNumberFormat?: string | null }).invoiceNumberFormat = data.invoiceNumberFormat || null
+  if (data.invoicePrefix !== undefined) (updateData as { invoicePrefix?: string | null }).invoicePrefix = (data.invoicePrefix ?? '').trim().slice(0, 4) || null
+  if (data.quoteNumberMiddle !== undefined) (updateData as { quoteNumberMiddle?: string | null }).quoteNumberMiddle = data.quoteNumberMiddle === '' ? null : sanitizeMiddle(data.quoteNumberMiddle, 6) || null
+  if (data.quoteNumberFormat !== undefined) (updateData as { quoteNumberFormat?: string | null }).quoteNumberFormat = data.quoteNumberFormat || null
+  if (data.quotePrefix !== undefined) (updateData as { quotePrefix?: string | null }).quotePrefix = (data.quotePrefix ?? '').trim().slice(0, 4) || null
+  if (data.creditNumberMiddle !== undefined) (updateData as { creditNumberMiddle?: string | null }).creditNumberMiddle = data.creditNumberMiddle === '' ? null : sanitizeMiddle(data.creditNumberMiddle, 6) || null
+  if (data.creditNumberFormat !== undefined) (updateData as { creditNumberFormat?: string | null }).creditNumberFormat = data.creditNumberFormat || null
+  if (data.creditNotePrefix !== undefined) (updateData as { creditNotePrefix?: string | null }).creditNotePrefix = (data.creditNotePrefix ?? '').trim().slice(0, 4) || null
+  if (data.defaultPaymentMethod !== undefined) (updateData as { defaultPaymentMethod?: string | null }).defaultPaymentMethod = data.defaultPaymentMethod || null
+  if (data.defaultPaymentTerms !== undefined) (updateData as { defaultPaymentTerms?: string | null }).defaultPaymentTerms = data.defaultPaymentTerms || null
+  if (data.legalPenaltiesText !== undefined) (updateData as { legalPenaltiesText?: string | null }).legalPenaltiesText = data.legalPenaltiesText || null
+  if (data.legalRecoveryFeeText !== undefined) (updateData as { legalRecoveryFeeText?: string | null }).legalRecoveryFeeText = data.legalRecoveryFeeText || null
   return prisma.billingSettings.update({
     where: { id: settings.id },
     data: updateData,
