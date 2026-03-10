@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
-import { canAccessFeature } from '@/lib/features'
 import { prisma } from '@/lib/prisma'
 import { logBillingActivity } from '@/lib/billing-activity'
 
@@ -12,7 +11,7 @@ export async function GET(
 ) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-  if (!canAccessFeature(session.planType as 'free' | 'premium', 'accounting')) {
+  if (session.subscriptionPlan !== 'pro' && session.subscriptionPlan !== 'business') {
     return NextResponse.json({ error: 'Fonctionnalité Premium' }, { status: 403 })
   }
   const { id } = await params
@@ -29,7 +28,7 @@ export async function PUT(
 ) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-  if (!canAccessFeature(session.planType as 'free' | 'premium', 'accounting')) {
+  if (session.subscriptionPlan !== 'pro' && session.subscriptionPlan !== 'business') {
     return NextResponse.json({ error: 'Fonctionnalité Premium' }, { status: 403 })
   }
   const { id } = await params
@@ -39,6 +38,8 @@ export async function PUT(
   const expense = await prisma.expense.update({
     where: { id },
     data: {
+      companyId: body.companyId !== undefined ? (body.companyId || null) : undefined,
+      bankAccountId: body.bankAccountId !== undefined ? (body.bankAccountId || null) : undefined,
       date: body.date ?? existing.date,
       amount: Number(body.amount) ?? existing.amount,
       category: body.category ?? existing.category,
@@ -47,6 +48,7 @@ export async function PUT(
       invoiceFile: body.invoiceFile ?? undefined,
     },
   })
+  await logBillingActivity(session.id, 'expense updated', 'expense', expense.id, { amount: expense.amount, category: expense.category })
   return NextResponse.json(expense)
 }
 
@@ -56,7 +58,7 @@ export async function DELETE(
 ) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-  if (!canAccessFeature(session.planType as 'free' | 'premium', 'accounting')) {
+  if (session.subscriptionPlan !== 'pro' && session.subscriptionPlan !== 'business') {
     return NextResponse.json({ error: 'Fonctionnalité Premium' }, { status: 403 })
   }
   const { id } = await params

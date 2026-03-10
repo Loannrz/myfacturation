@@ -63,20 +63,34 @@ export async function POST(req: NextRequest) {
         <p>Si vous n'avez pas créé de compte, ignorez cet email.</p>
       </body></html>
     `
-    await sendMail({
+    const mailResult = await sendMail({
       to: email,
       subject: 'Vérifiez votre email – Myfacturation',
       html,
       action: 'signup-verification',
     })
 
+    // Si l'email n'a pas été envoyé (SMTP non configuré ou erreur), on renvoie le code dans la réponse
+    // pour que l'utilisateur puisse quand même vérifier son compte (affiché sur la page de succès).
+    const verificationCode = !mailResult.ok ? code : undefined
+
     return NextResponse.json({
       ok: true,
-      message: 'Compte créé. Vérifiez votre email pour le code de vérification.',
+      message: mailResult.ok
+        ? 'Compte créé. Vérifiez votre email pour le code de vérification (et les spams).'
+        : 'Compte créé. Utilisez le code ci-dessous pour vérifier votre email.',
       email,
+      ...(verificationCode != null && { verificationCode }),
     })
   } catch (e) {
     console.error(e)
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+    const err = e as Error
+    const isDbError =
+      err?.name === 'PrismaClientInitializationError' ||
+      (typeof err?.message === 'string' && err.message.includes("Can't reach database"))
+    const message = isDbError
+      ? 'La base de données est indisponible. Vérifiez que PostgreSQL est démarré (localhost:5432).'
+      : 'Erreur serveur'
+    return NextResponse.json({ error: message }, { status: isDbError ? 503 : 500 })
   }
 }

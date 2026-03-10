@@ -15,8 +15,11 @@ export async function GET() {
       id: true,
       name: true,
       email: true,
+      phone: true,
       image: true,
       planType: true,
+      subscriptionPlan: true,
+      billingCycle: true,
       emailVerified: true,
     },
   })
@@ -27,8 +30,11 @@ export async function GET() {
   return NextResponse.json({
     ...user,
     companyName: settings?.companyName ?? undefined,
+    legalStatus: settings?.legalStatus ?? undefined,
     siret: settings?.siret ?? undefined,
     address: settings?.address ?? undefined,
+    postalCode: settings?.postalCode ?? undefined,
+    city: settings?.city ?? undefined,
     logoUrl: settings?.logoUrl ?? undefined,
   })
 }
@@ -40,14 +46,15 @@ export async function PATCH(req: Request) {
   }
   try {
     const body = await req.json()
-    const data: { name?: string; image?: string } = {}
+    const data: { name?: string | null; image?: string | null; phone?: string | null } = {}
     if (typeof body.name === 'string') data.name = body.name.trim() || null
     if (typeof body.image === 'string') data.image = body.image
+    if (typeof body.phone === 'string') data.phone = body.phone.trim() || null
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data,
     })
-    return NextResponse.json({ id: user.id, name: user.name, email: user.email, image: user.image })
+    return NextResponse.json({ id: user.id, name: user.name, email: user.email, phone: user.phone ?? undefined, image: user.image })
   } catch {
     return NextResponse.json({ error: 'Erreur' }, { status: 500 })
   }

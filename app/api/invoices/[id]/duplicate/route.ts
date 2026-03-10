@@ -6,11 +6,6 @@ import { logBillingActivity } from '@/lib/billing-activity'
 
 export const dynamic = 'force-dynamic'
 
-function formatInvoiceNumber(n: number) {
-  const y = new Date().getFullYear()
-  return `F-${y}-${String(n).padStart(4, '0')}`
-}
-
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,8 +18,7 @@ export async function POST(
     include: { lines: true },
   })
   if (!original) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
-  const nextNum = await getNextInvoiceNumber(session.id)
-  const number = formatInvoiceNumber(nextNum)
+  const number = await getNextInvoiceNumber(session.id)
   const invoice = await prisma.invoice.create({
     data: {
       userId: session.id,
@@ -37,6 +31,8 @@ export async function POST(
       currency: original.currency,
       paymentTerms: original.paymentTerms,
       paymentMethod: original.paymentMethod,
+      bankAccountId: original.bankAccountId,
+      emitterProfileId: original.emitterProfileId,
       totalHT: original.totalHT,
       vatAmount: original.vatAmount,
       totalTTC: original.totalTTC,

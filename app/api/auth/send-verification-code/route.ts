@@ -52,14 +52,21 @@ export async function POST(req: NextRequest) {
         <p><a href="${verifyUrl}">Entrer le code</a></p>
       </body></html>
     `
-    await sendMail({
+    const mailResult = await sendMail({
       to: email,
       subject: 'Votre code de vérification – Myfacturation',
       html,
       action: 'resend-verification',
     })
 
-    return NextResponse.json({ ok: true, message: 'Nouveau code envoyé par email' })
+    // Toujours renvoyer le code pour l'afficher sur la page (au cas où l'email n'arrive pas ou part en spam)
+    return NextResponse.json({
+      ok: true,
+      message: mailResult.ok
+        ? 'Nouveau code envoyé par email. S\'il n\'apparaît pas, utilisez le code ci-dessous.'
+        : 'Email non configuré ou en erreur. Utilisez le code ci-dessous.',
+      verificationCode: code,
+    })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

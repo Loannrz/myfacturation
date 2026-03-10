@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
+import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -34,7 +35,7 @@ export async function PUT(
       name: body.name ?? existing.name,
       description: body.description ?? existing.description,
       type: body.type ?? existing.type,
-      unitPrice: Number(body.unitPrice) ?? existing.unitPrice,
+      unitPrice: body.unitPrice !== undefined ? roundDownTo2Decimals(Number(body.unitPrice) ?? 0) : existing.unitPrice,
       vatRate: Number(body.vatRate) ?? existing.vatRate,
       discount: Number(body.discount) ?? existing.discount,
     },

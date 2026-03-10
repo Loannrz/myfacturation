@@ -1,34 +1,159 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Settings } from 'lucide-react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { Plus, Trash2, Sparkles, Lock } from 'lucide-react'
+import { planLabel, canAccessFeatureByPlan, maxEstablishments, maxBankAccounts } from '@/lib/subscription'
+
+type BankAccountEntry = { id: string; name: string; accountHolder: string; bankName: string; iban: string; bic: string }
+type EmitterProfileEntry = { id: string; name: string; companyName: string; legalStatus: string; siret: string; vatNumber?: string; apeCode?: string; address: string; postalCode: string; city: string; country?: string; phone?: string; email?: string; website?: string }
+
+function newBankAccount(): BankAccountEntry {
+  return { id: crypto.randomUUID(), name: '', accountHolder: '', bankName: '', iban: '', bic: '' }
+}
+
+function newEmitterProfile(): EmitterProfileEntry {
+  return { id: crypto.randomUUID(), name: '', companyName: '', legalStatus: '', siret: '', address: '', postalCode: '', city: '' }
+}
+
+const LEGAL_FORMS = [
+  'Auto-entreprise / Micro-entreprise',
+  'Association',
+  'SARL',
+  'SAS',
+  'SASU',
+  'SA',
+  'EURL',
+  'EI',
+  'EIRL',
+  'SCI',
+  'SEL',
+  'SCOP',
+  'Autre',
+]
 
 export default function ParametresPage() {
   const [profile, setProfile] = useState<{
     name?: string
     email?: string
-    companyName?: string
-    siret?: string
-    address?: string
-    logoUrl?: string
+    phone?: string
   } | null>(null)
+  const [emitterProfiles, setEmitterProfiles] = useState<EmitterProfileEntry[]>([])
+  const [bankAccounts, setBankAccounts] = useState<BankAccountEntry[]>([])
+  const [invoiceNumberMiddle, setInvoiceNumberMiddle] = useState('')
+  const [invoiceNumberFormat, setInvoiceNumberFormat] = useState<string>('sequential')
+  const [quoteNumberMiddle, setQuoteNumberMiddle] = useState('')
+  const [quoteNumberFormat, setQuoteNumberFormat] = useState<string>('sequential')
+  const [creditNumberMiddle, setCreditNumberMiddle] = useState('')
+  const [creditNumberFormat, setCreditNumberFormat] = useState<string>('sequential')
+  const [invoicePrefix, setInvoicePrefix] = useState('F')
+  const [quotePrefix, setQuotePrefix] = useState('D')
+  const [creditNotePrefix, setCreditNotePrefix] = useState('A')
+  const [defaultPaymentMethod, setDefaultPaymentMethod] = useState('')
+  const [defaultPaymentTerms, setDefaultPaymentTerms] = useState('')
+  const [legalPenaltiesText, setLegalPenaltiesText] = useState('')
+  const [legalRecoveryFeeText, setLegalRecoveryFeeText] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  /** Email du compte (affiché par défaut, mis à jour après changement d'email) */
+  const [accountEmail, setAccountEmail] = useState('')
+
+  // Changer d'email
+  const [newEmail, setNewEmail] = useState('')
+  const [changeEmailCode, setChangeEmailCode] = useState('')
+  const [changeEmailStep, setChangeEmailStep] = useState<'idle' | 'code_sent'>('idle')
+  const [changeEmailLoading, setChangeEmailLoading] = useState(false)
+  const [changeEmailMessage, setChangeEmailMessage] = useState('')
+  const [changeEmailCodeDisplay, setChangeEmailCodeDisplay] = useState<string | null>(null)
+  const [subscriptionPlan, setSubscriptionPlan] = useState<'starter' | 'pro' | 'business'>('starter')
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     Promise.all([fetch('/api/me').then((r) => r.json()), fetch('/api/settings').then((r) => r.json())])
       .then(([user, settings]) => {
+        const email = user.email ?? ''
+        setAccountEmail(email)
         setProfile({
           name: user.name ?? '',
-          email: user.email ?? '',
-          companyName: settings.companyName ?? '',
-          siret: settings.siret ?? '',
-          address: settings.address ?? '',
-          logoUrl: settings.logoUrl ?? '',
+          email,
+          phone: user.phone ?? '',
         })
+        const plan = user.subscriptionPlan ?? 'starter'
+        setSubscriptionPlan(plan === 'pro' || plan === 'business' ? plan : 'starter')
+        const emitters = Array.isArray(settings.emitterProfiles) ? settings.emitterProfiles : []
+        if (emitters.length > 0) {
+          setEmitterProfiles(emitters.map((e: EmitterProfileEntry) => ({ ...newEmitterProfile(), ...e, id: e.id || crypto.randomUUID() })))
+        } else if (settings.companyName || settings.siret) {
+          setEmitterProfiles([{ ...newEmitterProfile(), name: 'Établissement principal', companyName: settings.companyName ?? '', legalStatus: settings.legalStatus ?? '', siret: settings.siret ?? '', address: settings.address ?? '', postalCode: settings.postalCode ?? '', city: settings.city ?? '' }])
+        }
+        const accounts = Array.isArray(settings.bankAccounts) ? settings.bankAccounts : []
+        setBankAccounts(accounts.length > 0 ? accounts.map((a: BankAccountEntry) => ({ ...newBankAccount(), ...a, id: a.id || crypto.randomUUID() })) : [])
+        setInvoiceNumberMiddle(settings.invoiceNumberMiddle ?? '')
+        setInvoiceNumberFormat(settings.invoiceNumberFormat ?? 'sequential')
+        setQuoteNumberMiddle(settings.quoteNumberMiddle ?? '')
+        setQuoteNumberFormat(settings.quoteNumberFormat ?? 'sequential')
+        setCreditNumberMiddle(settings.creditNumberMiddle ?? '')
+        setCreditNumberFormat(settings.creditNumberFormat ?? 'sequential')
+        setInvoicePrefix(settings.invoicePrefix ?? 'F')
+        setQuotePrefix(settings.quotePrefix ?? 'D')
+        setCreditNotePrefix(settings.creditNotePrefix ?? 'A')
+        setDefaultPaymentMethod(settings.defaultPaymentMethod ?? '')
+        const terms = settings.defaultPaymentTerms ?? ''
+        const termsMatch = ['15 jours', '30 jours', '60 jours', '90 jours'].find((t) => terms.includes(t.split(' ')[0]))
+        setDefaultPaymentTerms(termsMatch ?? '')
+        setLegalPenaltiesText(settings.legalPenaltiesText ?? '')
+        setLegalRecoveryFeeText(settings.legalRecoveryFeeText ?? '')
       })
       .catch(() => setProfile({}))
   }, [])
+
+  useEffect(() => {
+    const upgraded = searchParams.get('upgraded')
+    if (upgraded === 'pro' || upgraded === 'business') {
+      setSubscriptionPlan(upgraded)
+      setMessage('Formule mise à jour.')
+    }
+  }, [searchParams])
+
+  const persistSettings = async (
+    profiles: typeof emitterProfiles,
+    accounts: typeof bankAccounts,
+    numberSettings?: { invoiceNumberMiddle: string; invoiceNumberFormat: string; quoteNumberMiddle: string; quoteNumberFormat: string; creditNumberMiddle: string; creditNumberFormat: string; invoicePrefix: string; quotePrefix: string; creditNotePrefix: string },
+    paymentAndLegal?: { defaultPaymentMethod: string; defaultPaymentTerms: string; legalPenaltiesText: string; legalRecoveryFeeText: string; logoUrl: string }
+  ) => {
+    const body: Record<string, unknown> = {
+      emitterProfiles: profiles.map((e) => ({ ...e, vatNumber: e.vatNumber || undefined, apeCode: e.apeCode || undefined, country: e.country || undefined, phone: e.phone || undefined, email: e.email || undefined, website: e.website || undefined })),
+      bankAccounts: accounts.filter((a) => a.name.trim() || a.iban.trim()),
+    }
+    if (numberSettings) {
+      body.invoiceNumberMiddle = numberSettings.invoiceNumberMiddle.slice(0, 6).replace(/[^a-zA-Z0-9]/g, '')
+      body.invoiceNumberFormat = numberSettings.invoiceNumberFormat
+      body.quoteNumberMiddle = numberSettings.quoteNumberMiddle.slice(0, 6).replace(/[^a-zA-Z0-9]/g, '')
+      body.quoteNumberFormat = numberSettings.quoteNumberFormat
+      body.creditNumberMiddle = numberSettings.creditNumberMiddle.slice(0, 6).replace(/[^a-zA-Z0-9]/g, '')
+      body.creditNumberFormat = numberSettings.creditNumberFormat
+      body.invoicePrefix = numberSettings.invoicePrefix.trim().slice(0, 4) || 'F'
+      body.quotePrefix = numberSettings.quotePrefix.trim().slice(0, 4) || 'D'
+      body.creditNotePrefix = numberSettings.creditNotePrefix.trim().slice(0, 4) || 'A'
+    }
+    if (paymentAndLegal) {
+      body.defaultPaymentMethod = paymentAndLegal.defaultPaymentMethod || undefined
+      body.defaultPaymentTerms = paymentAndLegal.defaultPaymentTerms || undefined
+      body.legalPenaltiesText = paymentAndLegal.legalPenaltiesText || undefined
+      body.legalRecoveryFeeText = paymentAndLegal.legalRecoveryFeeText || undefined
+      body.logoUrl = paymentAndLegal.logoUrl !== undefined ? paymentAndLegal.logoUrl : undefined
+    }
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error((data as { error?: string }).error || 'Erreur')
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,38 +164,151 @@ export default function ParametresPage() {
       await fetch('/api/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: profile.name }),
+        body: JSON.stringify({ name: profile.name, phone: profile.phone }),
       })
-      await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          companyName: profile.companyName,
-          siret: profile.siret,
-          address: profile.address,
-          logoUrl: profile.logoUrl,
-        }),
+      await persistSettings(emitterProfiles, bankAccounts, {
+        invoiceNumberMiddle,
+        invoiceNumberFormat,
+        quoteNumberMiddle,
+        quoteNumberFormat,
+        creditNumberMiddle,
+        creditNumberFormat,
+        invoicePrefix,
+        quotePrefix,
+        creditNotePrefix,
+      }, {
+        defaultPaymentMethod,
+        defaultPaymentTerms,
+        legalPenaltiesText,
+        legalRecoveryFeeText,
+        logoUrl: '',
       })
       setMessage('Paramètres enregistrés.')
-    } catch {
-      setMessage('Erreur lors de l\'enregistrement.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Erreur lors de l\'enregistrement.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
     setSaving(false)
   }
 
+  const numSettings = () => ({ invoiceNumberMiddle, invoiceNumberFormat, quoteNumberMiddle, quoteNumberFormat, creditNumberMiddle, creditNumberFormat, invoicePrefix, quotePrefix, creditNotePrefix })
+  const payLegal = () => ({ defaultPaymentMethod, defaultPaymentTerms, legalPenaltiesText, legalRecoveryFeeText, logoUrl: '' })
+
+  const removeEstablishment = (ep: EmitterProfileEntry) => {
+    const next = emitterProfiles.filter((e) => e.id !== ep.id)
+    setEmitterProfiles(next)
+    persistSettings(next, bankAccounts, numSettings(), payLegal())
+      .then(() => setMessage('Établissement supprimé.'))
+      .catch((err) => setMessage(err instanceof Error ? err.message : 'Erreur lors de la suppression.'))
+  }
+
+  const removeBankAccount = (acc: BankAccountEntry) => {
+    const next = bankAccounts.filter((a) => a.id !== acc.id)
+    setBankAccounts(next)
+    persistSettings(emitterProfiles, next, numSettings(), payLegal())
+      .then(() => setMessage('Compte supprimé.'))
+      .catch((err) => setMessage(err instanceof Error ? err.message : 'Erreur lors de la suppression.'))
+  }
+
+  const handleRequestChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newEmail.trim()) return
+    setChangeEmailLoading(true)
+    setChangeEmailMessage('')
+    try {
+      const res = await fetch('/api/auth/request-change-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newEmail: newEmail.trim().toLowerCase() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setChangeEmailMessage(data.error || 'Erreur')
+      } else {
+        setChangeEmailStep('code_sent')
+        setChangeEmailCodeDisplay(data.verificationCode ?? null)
+        setChangeEmailMessage(data.message || 'Code envoyé.')
+      }
+    } catch {
+      setChangeEmailMessage('Erreur réseau')
+    }
+    setChangeEmailLoading(false)
+  }
+
+  const handleConfirmChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setChangeEmailLoading(true)
+    setChangeEmailMessage('')
+    try {
+      const res = await fetch('/api/auth/confirm-change-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: changeEmailCode.replace(/\D/g, '').slice(0, 6) }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setChangeEmailMessage(data.error || 'Erreur')
+      } else {
+        setChangeEmailStep('idle')
+        setNewEmail('')
+        setChangeEmailCode('')
+        setChangeEmailCodeDisplay(null)
+        setChangeEmailMessage('Adresse email mise à jour. Rechargez la page.')
+        const updated = newEmail.trim().toLowerCase()
+        setAccountEmail(updated)
+        if (profile) setProfile({ ...profile, email: updated })
+      }
+    } catch {
+      setChangeEmailMessage('Erreur réseau')
+    }
+    setChangeEmailLoading(false)
+  }
+
   if (!profile) {
     return (
-    <div className="max-w-xl mx-auto">
-      <div className="p-8 text-center text-[var(--muted)]">Chargement…</div>
-    </div>
+      <div className="max-w-xl mx-auto">
+        <div className="p-8 text-center text-[var(--muted)]">Chargement…</div>
+      </div>
     )
   }
+
+  const canEditAdvancedSettings = canAccessFeatureByPlan(subscriptionPlan, 'advancedSettings')
+  const maxEstablishmentsPlan = maxEstablishments(subscriptionPlan)
+  const maxBankAccountsPlan = maxBankAccounts(subscriptionPlan)
 
   return (
     <div className="max-w-xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">Paramètres</h1>
         <p className="text-[var(--muted)] text-sm mt-1">Profil et informations pour vos factures</p>
+      </div>
+
+      {/* Formule actuelle */}
+      <div className="border border-[var(--border)] rounded-xl p-6 mb-6 bg-[var(--background)]">
+        <h2 className="text-sm font-medium text-[var(--foreground)] mb-2 flex items-center gap-2">
+          <Sparkles className="w-4 h-4" />
+          Formule actuelle : {planLabel(subscriptionPlan)}
+        </h2>
+        {subscriptionPlan === 'starter' && (
+          <>
+            <p className="text-sm text-[var(--muted)] mb-4">Vous utilisez actuellement la formule gratuite.</p>
+            <Link href="/formules" className="inline-flex px-4 py-2 rounded-lg border border-[var(--border)] font-medium text-sm hover:bg-[var(--border)]/20">
+              Voir toutes les formules
+            </Link>
+          </>
+        )}
+        {subscriptionPlan === 'pro' && (
+          <>
+            <p className="text-sm text-[var(--muted)] mb-4">Accès aux produits, avoirs, dépenses et comptabilité.</p>
+            <Link href="/formules" className="inline-flex px-4 py-2 rounded-lg border border-[var(--border)] font-medium text-sm hover:bg-[var(--border)]/20">
+              Voir toutes les formules
+            </Link>
+          </>
+        )}
+        {subscriptionPlan === 'business' && (
+          <p className="text-sm text-[var(--muted)]">Toutes les fonctionnalités sont débloquées.</p>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -96,77 +334,494 @@ export default function ParametresPage() {
               />
             </div>
             <div>
-              <label htmlFor="email" className="block text-sm text-gray-600 mb-1">
+              <label htmlFor="email" className="block text-sm text-[var(--muted)] mb-1">
                 Email
               </label>
               <input
                 id="email"
                 type="email"
-                value={profile.email ?? ''}
+                value={(accountEmail || profile?.email) ?? ''}
                 readOnly
-                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--border)]/20 text-[var(--muted)]"
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)]"
               />
-              <p className="text-xs text-[var(--muted)] mt-1">L'email ne peut pas être modifié ici.</p>
+              <p className="text-xs text-[var(--muted)] mt-1">Pour changer d&apos;email, utilisez le bloc ci-dessous.</p>
+            </div>
+            <div>
+              <label htmlFor="phone" className="block text-sm text-[var(--muted)] mb-1">
+                Téléphone
+              </label>
+              <input
+                id="phone"
+                type="tel"
+                value={profile.phone ?? ''}
+                onChange={(e) => setProfile((p) => (p ? { ...p, phone: e.target.value } : p))}
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                placeholder="06 12 34 56 78"
+              />
+            </div>
+
+            <div className="pt-4 border-t border-[var(--border)]">
+              <h3 className="text-sm font-medium mb-2">Changer d&apos;email</h3>
+              <p className="text-xs text-[var(--muted)] mb-3">
+                Un code sera envoyé à la nouvelle adresse. Une fois le code validé, le compte sera transféré sur cette adresse.
+              </p>
+              {changeEmailMessage && (
+                <p className={`text-sm mb-2 ${changeEmailMessage.includes('Erreur') ? 'text-red-600' : 'text-green-600'}`}>
+                  {changeEmailMessage}
+                </p>
+              )}
+              {changeEmailStep === 'idle' ? (
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="Nouvelle adresse email"
+                    className="flex-1 px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRequestChangeEmail}
+                    disabled={changeEmailLoading || !newEmail.trim()}
+                    className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] text-sm font-medium disabled:opacity-50"
+                  >
+                    {changeEmailLoading ? 'Envoi…' : 'Envoyer le code'}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {changeEmailCodeDisplay && (
+                    <p className="text-sm p-2 rounded bg-[var(--border)]/30">
+                      Code : <strong className="font-mono">{changeEmailCodeDisplay}</strong>
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={changeEmailCode}
+                      onChange={(e) => setChangeEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Code à 6 chiffres"
+                      maxLength={6}
+                      className="w-32 px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleConfirmChangeEmail}
+                      disabled={changeEmailLoading || changeEmailCode.replace(/\D/g, '').length !== 6}
+                      className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] text-sm font-medium disabled:opacity-50"
+                    >
+                      {changeEmailLoading ? 'Vérification…' : 'Confirmer'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setChangeEmailStep('idle'); setNewEmail(''); setChangeEmailCode(''); setChangeEmailCodeDisplay(null); setChangeEmailMessage(''); }}
+                      className="px-4 py-2 rounded-lg border border-[var(--border)] text-sm"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         <div className="border border-[var(--border)] rounded-xl p-6">
-          <h2 className="text-sm font-medium mb-4">Informations sur vos factures</h2>
+          <h2 className="text-sm font-medium mb-4">Établissements / Profils émetteur</h2>
+          <p className="text-xs text-[var(--muted)] mb-2">
+            Ajoutez un ou plusieurs établissements. Lors de la création d&apos;un devis ou d&apos;une facture, vous choisirez avec quel établissement facturer.
+          </p>
           <p className="text-xs text-[var(--muted)] mb-4">
-            Ces informations apparaissent sur vos factures et devis (émetteur).
+            Établissements : {emitterProfiles.length} / {maxEstablishmentsPlan} {subscriptionPlan === 'starter' && '— Passer à Pro pour 2, Business pour 10'}
+            {subscriptionPlan === 'pro' && maxEstablishmentsPlan === 2 && ' — Passer à Business pour 10'}
+          </p>
+          <div className="space-y-6">
+            {emitterProfiles.map((ep, index) => (
+              <div key={ep.id} className="p-4 rounded-lg border border-[var(--border)] bg-[var(--background)] space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-[var(--muted)]">Établissement {index + 1}</span>
+                  <button type="button" onClick={() => removeEstablishment(ep)} className="text-[var(--muted)] hover:text-red-600 p-1" title="Supprimer"><Trash2 className="w-4 h-4" /></button>
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Nom de l&apos;établissement (ex : Siège, Agence Lyon)</label>
+                  <input type="text" value={ep.name} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, name: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="Siège" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Forme juridique</label>
+                  <select value={ep.legalStatus} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, legalStatus: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]">
+                    <option value="">— Choisir —</option>
+                    {LEGAL_FORMS.map((f) => (<option key={f} value={f}>{f}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Raison sociale</label>
+                  <input type="text" value={ep.companyName} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, companyName: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">SIRET</label>
+                  <input type="text" value={ep.siret} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, siret: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="123 456 789 00012" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Adresse</label>
+                  <textarea rows={2} value={ep.address} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, address: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="Numéro et nom de rue" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Code postal</label>
+                    <input type="text" value={ep.postalCode} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, postalCode: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="75001" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Ville</label>
+                    <input type="text" value={ep.city} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, city: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="Paris" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Pays</label>
+                  <input type="text" value={ep.country ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, country: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="France" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Code APE / NAF (optionnel)</label>
+                  <input type="text" value={ep.apeCode ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, apeCode: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="62.01Z" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">N° TVA (optionnel)</label>
+                  <input type="text" value={ep.vatNumber ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, vatNumber: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="FR XX XXXXXXXXX" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Téléphone</label>
+                    <input type="text" value={ep.phone ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, phone: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="06 12 34 56 78" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Email</label>
+                    <input type="email" value={ep.email ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, email: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Site web</label>
+                    <input type="text" value={ep.website ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, website: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="https://..." />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setEmitterProfiles((prev) => [...prev, newEmitterProfile()])}
+              disabled={emitterProfiles.length >= maxEstablishmentsPlan}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border)] text-sm text-[var(--foreground)] hover:bg-[var(--border)]/20 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Ajouter un établissement
+            </button>
+          </div>
+        </div>
+
+        <div className="border border-[var(--border)] rounded-xl p-6">
+          <h2 className="text-sm font-medium mb-4">Coordonnées bancaires</h2>
+          <p className="text-xs text-[var(--muted)] mb-2">
+            Ajoutez un ou plusieurs comptes. Lors de la création d&apos;un devis ou d&apos;une facture avec mode de paiement par virement, vous pourrez choisir le compte à afficher.
+          </p>
+          <p className="text-xs text-[var(--muted)] mb-4">
+            Comptes : {bankAccounts.length} / {maxBankAccountsPlan} {subscriptionPlan === 'starter' && '— Passer à Pro pour 2, Business pour 10'}
+            {subscriptionPlan === 'pro' && maxBankAccountsPlan === 2 && ' — Passer à Business pour 10'}
+          </p>
+          <div className="space-y-6">
+            {bankAccounts.map((acc, index) => (
+              <div key={acc.id} className="p-4 rounded-lg border border-[var(--border)] bg-[var(--background)] space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-[var(--muted)]">Compte {index + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeBankAccount(acc)}
+                    className="text-[var(--muted)] hover:text-red-600 p-1"
+                    title="Supprimer ce compte"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Nom du compte (ex : Compte pro, Compte perso)</label>
+                  <input
+                    type="text"
+                    value={acc.name}
+                    onChange={(e) => setBankAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, name: e.target.value } : a)))}
+                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                    placeholder="Compte pro"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Titulaire du compte</label>
+                  <input
+                    type="text"
+                    value={acc.accountHolder}
+                    onChange={(e) => setBankAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, accountHolder: e.target.value } : a)))}
+                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                    placeholder="Jean Dupont"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Nom de la banque</label>
+                  <input
+                    type="text"
+                    value={acc.bankName}
+                    onChange={(e) => setBankAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, bankName: e.target.value } : a)))}
+                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                    placeholder="Banque Example"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-[var(--muted)] mb-1">IBAN</label>
+                    <input
+                      type="text"
+                      value={acc.iban}
+                      onChange={(e) => setBankAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, iban: e.target.value } : a)))}
+                      className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                      placeholder="FR76 1234 5678 9012 3456 7890 123"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-[var(--muted)] mb-1">BIC / SWIFT</label>
+                    <input
+                      type="text"
+                      value={acc.bic}
+                      onChange={(e) => setBankAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, bic: e.target.value } : a)))}
+                      className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                      placeholder="BNPAFRPP"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setBankAccounts((prev) => [...prev, newBankAccount()])}
+              disabled={bankAccounts.length >= maxBankAccountsPlan}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border)] text-sm text-[var(--foreground)] hover:bg-[var(--border)]/20 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Ajouter un compte
+            </button>
+          </div>
+        </div>
+
+        <div className="border border-[var(--border)] rounded-xl p-6 relative">
+          {!canEditAdvancedSettings && (
+            <div className="absolute inset-0 z-10 rounded-xl bg-[var(--background)]/80 flex flex-col items-center justify-center gap-2 cursor-not-allowed">
+              <Lock className="w-8 h-8 text-[var(--muted)]" />
+              <p className="text-sm text-[var(--muted)] text-center px-4">Disponible dans la formule Pro ou Business.</p>
+              <Link href="/formules" className="text-sm font-medium text-violet-600 hover:underline">Voir les formules</Link>
+            </div>
+          )}
+          <h2 className="text-sm font-medium mb-4">Numérotation des factures, devis et avoirs</h2>
+          <p className="text-xs text-[var(--muted)] mb-4">
+            Préfixe (ex: F, D, A), partie centrale optionnelle (max 6 car.), format du numéro. Exemple : F-2026-0001.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="space-y-3">
+              <h3 className="text-xs font-medium text-[var(--muted)]">Factures</h3>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">Préfixe (ex: F)</label>
+                <input
+                  type="text"
+                  value={invoicePrefix}
+                  onChange={(e) => setInvoicePrefix(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 4))}
+                  maxLength={4}
+                  disabled={!canEditAdvancedSettings}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">Partie centrale (optionnel, max 6 car.)</label>
+                <input
+                  type="text"
+                  value={invoiceNumberMiddle}
+                  onChange={(e) => setInvoiceNumberMiddle(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6))}
+                  placeholder="ex: 2026"
+                  maxLength={6}
+                  disabled={!canEditAdvancedSettings}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">Format du numéro</label>
+                <select
+                  value={invoiceNumberFormat}
+                  onChange={(e) => setInvoiceNumberFormat(e.target.value)}
+                  disabled={!canEditAdvancedSettings}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <option value="sequential">Séquentiel : 0001, 0002, 0003</option>
+                  <option value="ddmm_seq">Date (JJMM) + séquentiel : 1003-0001 (ex. 10 mars)</option>
+                  <option value="year_seq">Année + séquentiel : 2026-0001</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-xs font-medium text-[var(--muted)]">Devis</h3>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">Préfixe (ex: D)</label>
+                <input
+                  type="text"
+                  value={quotePrefix}
+                  onChange={(e) => setQuotePrefix(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 4))}
+                  maxLength={4}
+                  disabled={!canEditAdvancedSettings}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">Partie centrale (optionnel, max 6 car.)</label>
+                <input
+                  type="text"
+                  value={quoteNumberMiddle}
+                  onChange={(e) => setQuoteNumberMiddle(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6))}
+                  placeholder="ex: 2026"
+                  maxLength={6}
+                  disabled={!canEditAdvancedSettings}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">Format du numéro</label>
+                <select
+                  value={quoteNumberFormat}
+                  onChange={(e) => setQuoteNumberFormat(e.target.value)}
+                  disabled={!canEditAdvancedSettings}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <option value="sequential">Séquentiel : 0001, 0002, 0003</option>
+                  <option value="ddmm_seq">Date (JJMM) + séquentiel : 1003-0001 (ex. 10 mars)</option>
+                  <option value="year_seq">Année + séquentiel : 2026-0001</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-xs font-medium text-[var(--muted)]">Avoirs</h3>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">Préfixe (ex: A)</label>
+                <input
+                  type="text"
+                  value={creditNotePrefix}
+                  onChange={(e) => setCreditNotePrefix(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 4))}
+                  maxLength={4}
+                  disabled={!canEditAdvancedSettings}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">Partie centrale (optionnel, max 6 car.)</label>
+                <input
+                  type="text"
+                  value={creditNumberMiddle}
+                  onChange={(e) => setCreditNumberMiddle(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6))}
+                  placeholder="ex: 2026"
+                  maxLength={6}
+                  disabled={!canEditAdvancedSettings}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">Format du numéro</label>
+                <select
+                  value={creditNumberFormat}
+                  onChange={(e) => setCreditNumberFormat(e.target.value)}
+                  disabled={!canEditAdvancedSettings}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <option value="sequential">Séquentiel : 0001, 0002, 0003</option>
+                  <option value="ddmm_seq">Date (JJMM) + séquentiel : 1003-0001</option>
+                  <option value="year_seq">Année + séquentiel : 2026-0001</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-[var(--border)] rounded-xl p-6 relative">
+          {!canEditAdvancedSettings && (
+            <div className="absolute inset-0 z-10 rounded-xl bg-[var(--background)]/80 flex flex-col items-center justify-center gap-2 cursor-not-allowed">
+              <Lock className="w-8 h-8 text-[var(--muted)]" />
+              <p className="text-sm text-[var(--muted)] text-center px-4">Disponible dans la formule Pro ou Business.</p>
+              <Link href="/formules" className="text-sm font-medium text-violet-600 hover:underline">Voir les formules</Link>
+            </div>
+          )}
+          <h2 className="text-sm font-medium mb-4">Paiement par défaut</h2>
+          <p className="text-xs text-[var(--muted)] mb-4">
+            Ces valeurs peuvent être utilisées par défaut sur les nouveaux devis et factures.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-[var(--muted)] mb-1">Mode de paiement par défaut</label>
+              <select
+                value={defaultPaymentMethod}
+                onChange={(e) => setDefaultPaymentMethod(e.target.value)}
+                disabled={!canEditAdvancedSettings}
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <option value="">— Sélectionner —</option>
+                <option value="Virement bancaire">Virement bancaire</option>
+                <option value="Chèque">Chèque</option>
+                <option value="Carte bancaire">Carte bancaire</option>
+                <option value="Espèces">Espèces</option>
+                <option value="Prélèvement">Prélèvement</option>
+                <option value="Virement SEPA">Virement SEPA</option>
+                <option value="Autre">Autre</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-[var(--muted)] mb-1">Conditions de paiement (échéance)</label>
+              <select
+                value={defaultPaymentTerms}
+                onChange={(e) => setDefaultPaymentTerms(e.target.value)}
+                disabled={!canEditAdvancedSettings}
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <option value="">— Sélectionner —</option>
+                <option value="15 jours">15 jours</option>
+                <option value="30 jours">30 jours</option>
+                <option value="60 jours">60 jours</option>
+                <option value="90 jours">90 jours</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-[var(--border)] rounded-xl p-6 relative">
+          {!canEditAdvancedSettings && (
+            <div className="absolute inset-0 z-10 rounded-xl bg-[var(--background)]/80 flex flex-col items-center justify-center gap-2 cursor-not-allowed">
+              <Lock className="w-8 h-8 text-[var(--muted)]" />
+              <p className="text-sm text-[var(--muted)] text-center px-4">Disponible dans la formule Pro ou Business.</p>
+              <Link href="/formules" className="text-sm font-medium text-violet-600 hover:underline">Voir les formules</Link>
+            </div>
+          )}
+          <h2 className="text-sm font-medium mb-4">Mentions légales (documents)</h2>
+          <p className="text-xs text-[var(--muted)] mb-2">
+            Textes affichés en pied de facture / devis. Laissez vide pour utiliser les textes légaux par défaut.
+          </p>
+          <p className="text-xs text-[var(--muted)] mb-4 font-medium">
+            Nous vous conseillons de laisser par défaut : c&apos;est ce qui est recommandé et obligatoire.
           </p>
           <div className="space-y-4">
             <div>
-              <label htmlFor="companyName" className="block text-sm text-[var(--muted)] mb-1">
-                Nom de l'entreprise / Raison sociale
-              </label>
-              <input
-                id="companyName"
-                type="text"
-                value={profile.companyName ?? ''}
-                onChange={(e) => setProfile((p) => (p ? { ...p, companyName: e.target.value } : p))}
-                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
-                placeholder="Votre entreprise"
-              />
-            </div>
-            <div>
-              <label htmlFor="siret" className="block text-sm text-[var(--muted)] mb-1">
-                SIRET
-              </label>
-              <input
-                id="siret"
-                type="text"
-                value={profile.siret ?? ''}
-                onChange={(e) => setProfile((p) => (p ? { ...p, siret: e.target.value } : p))}
-                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
-                placeholder="123 456 789 00012"
-              />
-            </div>
-            <div>
-              <label htmlFor="address" className="block text-sm text-[var(--muted)] mb-1">
-                Adresse
-              </label>
+              <label className="block text-sm text-[var(--muted)] mb-1">Pénalités de retard</label>
               <textarea
-                id="address"
                 rows={2}
-                value={profile.address ?? ''}
-                onChange={(e) => setProfile((p) => (p ? { ...p, address: e.target.value } : p))}
-                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
-                placeholder="Adresse postale"
+                value={legalPenaltiesText}
+                onChange={(e) => setLegalPenaltiesText(e.target.value)}
+                placeholder="Pénalités de retard exigibles en cas de non paiement à la date d'échéance."
+                disabled={!canEditAdvancedSettings}
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
             <div>
-              <label htmlFor="logoUrl" className="block text-sm text-[var(--muted)] mb-1">
-                URL du logo (optionnel)
-              </label>
+              <label className="block text-sm text-[var(--muted)] mb-1">Indemnité forfaitaire recouvrement</label>
               <input
-                id="logoUrl"
-                type="url"
-                value={profile.logoUrl ?? ''}
-                onChange={(e) => setProfile((p) => (p ? { ...p, logoUrl: e.target.value } : p))}
-                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
-                placeholder="https://..."
+                type="text"
+                value={legalRecoveryFeeText}
+                onChange={(e) => setLegalRecoveryFeeText(e.target.value)}
+                placeholder="Indemnité forfaitaire pour frais de recouvrement : 40€ (article L441-10 du Code de commerce)"
+                disabled={!canEditAdvancedSettings}
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)] disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
           </div>

@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBillingSettings } from '@/lib/billing-settings'
 import { generateQuotePDF } from '@/lib/billing-pdf'
+import { loadPdfLib } from '@/lib/load-pdf-lib'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,8 @@ export async function GET(
   })
   if (!quote) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
   const settings = await getBillingSettings(session.id)
-  const pdf = await generateQuotePDF(quote, settings)
+  const pdfLib = await loadPdfLib()
+  const pdf = await generateQuotePDF(quote, settings, pdfLib)
   const filename = `devis-${quote.number}.pdf`.replace(/[^\w.\-]/g, '_')
   return new NextResponse(new Uint8Array(pdf), {
     headers: {

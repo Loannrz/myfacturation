@@ -1,16 +1,46 @@
 /**
  * Génération des PDF facture / devis – design premium type SaaS (pdf-lib).
  * Réutilisé depuis MyEventoo, logique inchangée.
+ * pdf-lib est chargé dynamiquement par les routes API pour éviter les erreurs de build Next.js.
  */
-import { PDFDocument, StandardFonts, rgb, RGB } from 'pdf-lib'
-import type { BillingSettings, Client, Company, Invoice, InvoiceLine, Quote, QuoteLine } from '@prisma/client'
+import type { BillingSettings, Client, Company, CreditNote, CreditNoteLine, Invoice, InvoiceLine, Quote, QuoteLine } from '@prisma/client'
+import { parseBankAccounts, parseEmitterProfiles } from '@/lib/billing-settings'
+
+/** Module pdf-lib passé par l’appelant (import dynamique dans la route API). */
+type PdfPage = {
+  drawText: (text: string, opts: { x: number; y: number; size: number; font: unknown; color: unknown }) => void
+  drawLine: (opts: { start: { x: number; y: number }; end: { x: number; y: number }; thickness: number; color: unknown }) => void
+  drawRectangle: (opts: { x: number; y: number; width: number; height: number; color?: unknown; borderColor?: unknown; borderWidth?: number }) => void
+}
+
+type PdfFont = { widthOfTextAtSize: (text: string, size: number) => number }
+
+export type PdfLibModule = {
+  PDFDocument: {
+    create(): Promise<{
+      addPage: (size: [number, number]) => PdfPage
+      embedFont: (font: unknown) => Promise<PdfFont>
+      save(): Promise<Uint8Array>
+    }>
+  }
+  StandardFonts: { Helvetica: unknown; HelveticaBold: unknown }
+  rgb: (r: number, g: number, b: number) => unknown
+}
 
 type BillingSettingsWithBank = BillingSettings & {
   bankAccountHolder?: string | null
   bankName?: string | null
   bankIban?: string | null
   bankBic?: string | null
+  bankAccounts?: string | null
+  legalPenaltiesText?: string | null
+  legalRecoveryFeeText?: string | null
 }
+
+const DEFAULT_LEGAL_PENALTIES = "Pénalités de retard exigibles en cas de non-paiement à la date d'échéance. Taux appliqué : taux légal en vigueur."
+const DEFAULT_LEGAL_RECOVERY = 'Indemnité forfaitaire pour frais de recouvrement : 40 € (article L. 441-10 du Code de commerce).'
+
+type ResolvedBank = { accountHolder: string; bankName: string; iban: string; bic: string } | null
 
 type DocType = 'invoice' | 'quote'
 
@@ -32,24 +62,29 @@ const PAGE_H = 842
 const CONTENT_W = PAGE_W - MARGIN * 2
 const MIN_Y_CONTINUE = 120
 
-const COLORS = {
-  primary: rgb(0.12, 0.12, 0.12) as RGB,
-  secondary: rgb(0.45, 0.45, 0.45) as RGB,
-  light: rgb(0.65, 0.65, 0.65) as RGB,
-  border: rgb(0.9, 0.9, 0.9) as RGB,
-  tableHeaderBg: rgb(0.97, 0.97, 0.98) as RGB,
-  footer: rgb(0.55, 0.55, 0.55) as RGB,
-  accent: rgb(0.2, 0.45, 0.7) as RGB,
-  paid: rgb(0.15, 0.55, 0.35) as RGB,
-  pending: rgb(0.75, 0.5, 0.1) as RGB,
-  late: rgb(0.7, 0.25, 0.2) as RGB,
+function buildColors(rgb: PdfLibModule['rgb']) {
+  return {
+    primary: rgb(0.12, 0.12, 0.12),
+    secondary: rgb(0.45, 0.45, 0.45),
+    light: rgb(0.65, 0.65, 0.65),
+    border: rgb(0.9, 0.9, 0.9),
+    tableHeaderBg: rgb(0.97, 0.97, 0.98),
+    footer: rgb(0.55, 0.55, 0.55),
+    accent: rgb(0.2, 0.45, 0.7),
+    paid: rgb(0.15, 0.55, 0.35),
+    pending: rgb(0.75, 0.5, 0.1),
+    late: rgb(0.7, 0.25, 0.2),
+  }
 }
 
+/** Remet tout texte dans un form acceptable pour WinAnsi (pdf-lib). */
 function sanitize(text: string): string {
-  return text
+  return String(text)
+    .replace(/\u202F/g, ' ')   // espace fine insécable (U+202F) → espace
+    .replace(/\u00A0/g, ' ')   // espace insécable (U+00A0) → espace
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x20-\x7E\u00A0-\u024F]/g, ' ')
+    .replace(/[^\x20-\x7E\u00A0-\u024F\u20AC]/g, ' ')  // € (U+20AC) conservé pour les montants
     .trim() || ' '
 }
 
@@ -84,7 +119,8 @@ function getRecipient(client: Client | null, company: Company | null): Recipient
 }
 
 function formatCurrency(amount: number, currency: string): string {
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: currency || 'EUR' }).format(amount)
+  const formatted = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: currency || 'EUR' }).format(amount)
+  return sanitize(formatted)
 }
 
 function formatDateFR(s: string | null | undefined): string {
@@ -97,28 +133,17 @@ function formatDateFR(s: string | null | undefined): string {
   return s
 }
 
-function drawLine(
-  page: ReturnType<PDFDocument['addPage']>,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  color: RGB = COLORS.border,
-  thickness = 0.5
-) {
-  page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness, color })
-}
-
 type InvoiceWithQuote = Invoice & {
   lines: InvoiceLine[]
   client: Client | null
   company: Company | null
-  quote?: { number: string } | null
+  quote?: { number: string; issueDate?: string } | null
 }
 
 export async function generateInvoicePDF(
   invoice: InvoiceWithQuote,
-  settings: BillingSettings
+  settings: BillingSettings,
+  pdfLib: PdfLibModule
 ): Promise<Buffer> {
   return generateDocumentPDF(
     'invoice',
@@ -126,17 +151,20 @@ export async function generateInvoicePDF(
     invoice.lines,
     settings,
     getRecipient(invoice.client, invoice.company),
+    pdfLib,
     (invoice as Invoice).status,
     invoice.paidAt ?? undefined,
-    invoice.quote?.number
+    invoice.quote?.number,
+    invoice.quote?.issueDate
   )
 }
 
 export async function generateQuotePDF(
   quote: Quote & { lines: QuoteLine[]; client: Client | null; company: Company | null },
-  settings: BillingSettings
+  settings: BillingSettings,
+  pdfLib: PdfLibModule
 ): Promise<Buffer> {
-  return generateDocumentPDF('quote', quote, quote.lines, settings, getRecipient(quote.client, quote.company), undefined, undefined, undefined)
+  return generateDocumentPDF('quote', quote, quote.lines, settings, getRecipient(quote.client, quote.company), pdfLib, undefined, undefined, undefined)
 }
 
 async function generateDocumentPDF(
@@ -145,12 +173,31 @@ async function generateDocumentPDF(
   lines: InvoiceLine[] | QuoteLine[],
   settings: BillingSettings,
   recipient: Recipient,
+  pdfLib: PdfLibModule,
   invoiceStatus?: string,
   paidAt?: Date,
-  quoteNumber?: string
+  quoteNumber?: string,
+  quoteIssueDate?: string,
+  titleOverride?: string,
+  invoiceReference?: string
 ): Promise<Buffer> {
+  const { PDFDocument, StandardFonts, rgb } = pdfLib
+  const COLORS = buildColors(rgb)
+
+  const drawLine = (
+    page: { drawLine: (opts: { start: { x: number; y: number }; end: { x: number; y: number }; thickness: number; color: unknown }) => void },
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    color: unknown = COLORS.border,
+    thickness = 0.5
+  ) => {
+    page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness, color })
+  }
+
   const isInvoice = type === 'invoice'
-  const title = isInvoice ? 'FACTURE' : 'DEVIS'
+  const title = titleOverride ?? (isInvoice ? 'FACTURE' : 'DEVIS')
   const docNumber = doc.number
   const issueDate = doc.issueDate
   const dueDate = doc.dueDate ?? undefined
@@ -161,6 +208,51 @@ async function generateDocumentPDF(
   const tvaNonApplicable = doc.tvaNonApplicable
   const paymentTerms = doc.paymentTerms ?? undefined
   const paymentMethod = doc.paymentMethod ?? undefined
+  const bankAccountId = (doc as { bankAccountId?: string | null }).bankAccountId ?? undefined
+  const emitterProfileId = (doc as { emitterProfileId?: string | null }).emitterProfileId ?? undefined
+
+  const s = settings as BillingSettingsWithBank & { emitterProfiles?: string | unknown[] }
+  const bankAccountsList = parseBankAccounts(typeof s.bankAccounts === 'string' ? s.bankAccounts : null)
+  const profilesList = Array.isArray(s.emitterProfiles) ? s.emitterProfiles : parseEmitterProfiles(typeof s.emitterProfiles === 'string' ? s.emitterProfiles : null)
+  const emitterProfile = emitterProfileId && profilesList.length > 0 ? profilesList.find((p: unknown) => (p as { id: string }).id === emitterProfileId) : null
+  const emitter = emitterProfile
+    ? {
+        companyName: (emitterProfile as { companyName?: string }).companyName ?? '',
+        legalStatus: (emitterProfile as { legalStatus?: string }).legalStatus ?? '',
+        address: (emitterProfile as { address?: string }).address ?? '',
+        postalCode: (emitterProfile as { postalCode?: string }).postalCode ?? '',
+        city: (emitterProfile as { city?: string }).city ?? '',
+        country: (emitterProfile as { country?: string }).country ?? '',
+        siret: (emitterProfile as { siret?: string }).siret ?? '',
+        vatNumber: (emitterProfile as { vatNumber?: string }).vatNumber ?? '',
+        apeCode: (emitterProfile as { apeCode?: string }).apeCode ?? '',
+        email: (emitterProfile as { email?: string }).email ?? '',
+        phone: (emitterProfile as { phone?: string }).phone ?? '',
+        website: (emitterProfile as { website?: string }).website ?? '',
+      }
+    : {
+        companyName: settings.companyName ?? '',
+        legalStatus: settings.legalStatus ?? '',
+        address: settings.address ?? '',
+        postalCode: settings.postalCode ?? '',
+        city: settings.city ?? '',
+        country: (settings as { country?: string }).country ?? '',
+        siret: settings.siret ?? '',
+        vatNumber: settings.vatNumber ?? '',
+        apeCode: (settings as { apeCode?: string }).apeCode ?? '',
+        email: settings.email ?? '',
+        phone: settings.phone ?? '',
+        website: settings.website ?? '',
+      }
+  const selectedBank: ResolvedBank = bankAccountId && bankAccountsList.length > 0
+    ? (() => {
+        const found = bankAccountsList.find((a) => a.id === bankAccountId)
+        return found ? { accountHolder: found.accountHolder, bankName: found.bankName, iban: found.iban, bic: found.bic } : null
+      })()
+    : (s.bankAccountHolder || s.bankIban || s.bankName || s.bankBic)
+      ? { accountHolder: s.bankAccountHolder ?? '', bankName: s.bankName ?? '', iban: s.bankIban ?? '', bic: s.bankBic ?? '' }
+      : null
+  const showBankSection = selectedBank && (isInvoice || paymentMethod === 'Virement bancaire' || paymentMethod === 'Virement SEPA')
 
   const issueDateFR = formatDateFR(issueDate)
   const dueDateFR = dueDate ? formatDateFR(dueDate) : ''
@@ -174,16 +266,20 @@ async function generateDocumentPDF(
   let page = docPdf.addPage([PAGE_W, PAGE_H])
   let y = contentStartY
 
-  const companyName = sanitize(settings.companyName || 'Myfacturation')
-  page.drawText(companyName, { x: MARGIN, y, size: 14, font: fontBold, color: COLORS.primary })
+  const companyName = sanitize(emitter.companyName || '')
+  if (companyName) page.drawText(companyName, { x: MARGIN, y, size: 14, font: fontBold, color: COLORS.primary })
   let yLeft = y - 16
   const leftLines: string[] = []
-  if (settings.address) leftLines.push(sanitize(settings.address))
-  if (settings.phone) leftLines.push(sanitize(settings.phone))
-  if (settings.email) leftLines.push(sanitize(settings.email ?? ''))
-  if (settings.website) leftLines.push(sanitize(settings.website ?? ''))
-  if (settings.siret) leftLines.push(`SIRET : ${settings.siret}`)
-  if (settings.vatNumber) leftLines.push(`TVA : ${settings.vatNumber}`)
+  if (emitter.address) leftLines.push(sanitize(emitter.address))
+  const pcCity = [emitter.postalCode, emitter.city].filter(Boolean).join(' ').trim()
+  if (pcCity) leftLines.push(sanitize(pcCity))
+  if (emitter.country) leftLines.push(sanitize(emitter.country))
+  if (emitter.phone) leftLines.push(sanitize(emitter.phone))
+  if (emitter.email) leftLines.push(sanitize(emitter.email ?? ''))
+  if (emitter.website) leftLines.push(sanitize(emitter.website ?? ''))
+  if (emitter.siret) leftLines.push(`SIRET : ${emitter.siret}`)
+  if (emitter.apeCode) leftLines.push(`APE : ${emitter.apeCode}`)
+  if (emitter.vatNumber) leftLines.push(`TVA : ${emitter.vatNumber}`)
   for (const line of leftLines) {
     page.drawText(line, { x: MARGIN, y: yLeft, size: 9, font, color: COLORS.secondary })
     yLeft -= 13
@@ -192,7 +288,7 @@ async function generateDocumentPDF(
   const rightX = PAGE_W - MARGIN - 180
   page.drawText(title, { x: rightX, y, size: 24, font: fontBold, color: COLORS.primary })
   let yRight = y - 22
-  page.drawText(docNumber, { x: rightX, y: yRight, size: 12, font: fontBold, color: COLORS.primary })
+  page.drawText(sanitize(docNumber), { x: rightX, y: yRight, size: 12, font: fontBold, color: COLORS.primary })
   yRight -= 16
   if (issueDateFR) page.drawText(`Date d'émission : ${issueDateFR}`, { x: rightX, y: yRight, size: 9, font, color: COLORS.secondary })
   yRight -= 13
@@ -200,8 +296,8 @@ async function generateDocumentPDF(
     page.drawText(`Échéance : ${dueDateFR}`, { x: rightX, y: yRight, size: 9, font, color: COLORS.secondary })
     yRight -= 13
   }
-  if (isInvoice && invoiceStatus) {
-    const statusLabels: Record<string, string> = { paid: 'PAYÉE', pending: 'EN ATTENTE', late: 'EN RETARD', sent: 'ENVOYÉE', draft: 'BROUILLON', cancelled: 'ANNULÉE' }
+  if (isInvoice && invoiceStatus && invoiceStatus !== 'draft') {
+    const statusLabels: Record<string, string> = { paid: 'PAYÉE', pending: 'EN ATTENTE', late: 'EN RETARD', sent: 'ENVOYÉE', cancelled: 'ANNULÉE' }
     const statusLabel = statusLabels[invoiceStatus] || String(invoiceStatus).toUpperCase()
     const statusColor = invoiceStatus === 'paid' ? COLORS.paid : invoiceStatus === 'late' ? COLORS.late : COLORS.pending
     const statusW = fontBold.widthOfTextAtSize(statusLabel, 9)
@@ -221,11 +317,6 @@ async function generateDocumentPDF(
       yRight -= 13
     }
   }
-  if (isInvoice && quoteNumber) {
-    page.drawText(`Devis de référence : ${sanitize(quoteNumber)}`, { x: rightX, y: yRight, size: 9, font, color: COLORS.secondary })
-    yRight -= 13
-  }
-
   y = Math.min(yLeft - 10, yRight - 10)
   drawLine(page, MARGIN, y, PAGE_W - MARGIN, y)
   y -= 28
@@ -236,30 +327,44 @@ async function generateDocumentPDF(
 
   page.drawText('Émetteur', { x: leftBlockX, y, size: 8, font: fontBold, color: COLORS.light })
   let yE = y - 14
-  page.drawText(companyName, { x: leftBlockX, y: yE, size: 10, font: fontBold, color: COLORS.primary })
-  yE -= 12
-  if (settings.legalStatus) {
-    page.drawText(sanitize(settings.legalStatus), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
+  if (companyName) {
+    page.drawText(companyName, { x: leftBlockX, y: yE, size: 10, font: fontBold, color: COLORS.primary })
+    yE -= 12
+  }
+  if (emitter.legalStatus) {
+    page.drawText(sanitize(emitter.legalStatus), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
     yE -= 11
   }
-  if (settings.address) {
-    page.drawText(sanitize(settings.address), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
+  if (emitter.address) {
+    page.drawText(sanitize(emitter.address), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
     yE -= 11
   }
-  if (settings.siret) {
-    page.drawText(`SIRET : ${settings.siret}`, { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
+  if (emitter.postalCode || emitter.city) {
+    page.drawText(sanitize([emitter.postalCode, emitter.city].filter(Boolean).join(' ')), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
     yE -= 11
   }
-  if (settings.vatNumber) {
-    page.drawText(`TVA : ${settings.vatNumber}`, { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
+  if (emitter.country) {
+    page.drawText(sanitize(emitter.country), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
     yE -= 11
   }
-  if (settings.email) {
-    page.drawText(sanitize(settings.email), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
+  if (emitter.siret) {
+    page.drawText(`SIRET : ${emitter.siret}`, { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
     yE -= 11
   }
-  if (settings.phone) {
-    page.drawText(sanitize(settings.phone), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
+  if (emitter.apeCode) {
+    page.drawText(`APE : ${emitter.apeCode}`, { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
+    yE -= 11
+  }
+  if (emitter.vatNumber) {
+    page.drawText(`TVA : ${emitter.vatNumber}`, { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
+    yE -= 11
+  }
+  if (emitter.email) {
+    page.drawText(sanitize(emitter.email), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
+    yE -= 11
+  }
+  if (emitter.phone) {
+    page.drawText(sanitize(emitter.phone), { x: leftBlockX, y: yE, size: 9, font, color: COLORS.secondary })
     yE -= 11
   }
 
@@ -275,7 +380,7 @@ async function generateDocumentPDF(
     { text: recipient.email ? sanitize(recipient.email) : '—' },
   ]
   for (const line of destLines) {
-    page.drawText(line.text, {
+    page.drawText(sanitize(line.text), {
       x: rightBlockX,
       y: yD,
       size: line.bold ? 10 : 9,
@@ -288,6 +393,16 @@ async function generateDocumentPDF(
   y = Math.min(yE, yD) - 24
   drawLine(page, MARGIN, y, PAGE_W - MARGIN, y)
   y -= 20
+
+  if (isInvoice && quoteNumber) {
+    const quoteRef = `Réf. devis : ${sanitize(quoteNumber)}${quoteIssueDate ? ` du ${formatDateFR(quoteIssueDate)}` : ''}`
+    page.drawText(quoteRef, { x: MARGIN, y, size: 9, font, color: COLORS.secondary })
+    y -= 16
+  }
+  if (invoiceReference) {
+    page.drawText(sanitize(invoiceReference), { x: MARGIN, y, size: 9, font, color: COLORS.secondary })
+    y -= 16
+  }
 
   const colW = { desc: CONTENT_W - 220, qty: 28, unit: 48, discount: 38, vat: 32, total: 74 }
   const rowH = 20
@@ -303,7 +418,7 @@ async function generateDocumentPDF(
     tableRight,
   ]
 
-  function drawTableHeader(p: ReturnType<PDFDocument['addPage']>, headerY: number) {
+  function drawTableHeader(p: PdfPage, headerY: number) {
     p.drawRectangle({
       x: MARGIN,
       y: headerY - rowH + 4,
@@ -412,24 +527,23 @@ async function generateDocumentPDF(
     yLeftCol -= 14
   }
 
-  const s = settings as BillingSettingsWithBank
-  if (isInvoice && (s.bankIban || s.bankBic || s.bankName || s.bankAccountHolder)) {
+  if (showBankSection && selectedBank) {
     page.drawText('Coordonnées bancaires', { x: colMid + 12, y: sectionStartY, size: 10, font: fontBold, color: COLORS.primary })
     let yRightCol = sectionStartY - 16
-    if (s.bankAccountHolder) {
-      page.drawText(`Titulaire : ${sanitize(s.bankAccountHolder)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
+    if (selectedBank.accountHolder) {
+      page.drawText(`Titulaire : ${sanitize(selectedBank.accountHolder)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
       yRightCol -= 12
     }
-    if (s.bankName) {
-      page.drawText(`Banque : ${sanitize(s.bankName)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
+    if (selectedBank.bankName) {
+      page.drawText(`Banque : ${sanitize(selectedBank.bankName)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
       yRightCol -= 12
     }
-    if (s.bankIban) {
-      page.drawText(`IBAN : ${sanitize(s.bankIban)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
+    if (selectedBank.iban) {
+      page.drawText(`IBAN : ${sanitize(selectedBank.iban)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
       yRightCol -= 12
     }
-    if (s.bankBic) {
-      page.drawText(`BIC : ${sanitize(s.bankBic)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
+    if (selectedBank.bic) {
+      page.drawText(`BIC : ${sanitize(selectedBank.bic)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
       yRightCol -= 12
     }
     y = Math.min(yLeftCol, yRightCol) - 12
@@ -440,25 +554,74 @@ async function generateDocumentPDF(
   const footerY = 56
   drawLine(page, MARGIN, footerY + 2, PAGE_W - MARGIN, footerY + 2)
   const footerParts: string[] = []
-  if (settings.companyName) footerParts.push(sanitize(settings.companyName))
-  if (settings.siret) footerParts.push(`SIRET ${settings.siret}`)
-  if (settings.address) footerParts.push(sanitize(settings.address ?? ''))
-  if (settings.email) footerParts.push(sanitize(settings.email ?? ''))
-  if (settings.phone) footerParts.push(sanitize(settings.phone ?? ''))
-  if (settings.website) footerParts.push(sanitize(settings.website ?? ''))
-  const footerText = footerParts.join('  ·  ')
+  if (emitter.companyName) footerParts.push(sanitize(emitter.companyName))
+  if (emitter.siret) footerParts.push(`SIRET ${emitter.siret}`)
+  if (emitter.address) footerParts.push(sanitize(emitter.address ?? ''))
+  const footerPcCity = [emitter.postalCode, emitter.city].filter(Boolean).join(' ').trim()
+  if (footerPcCity) footerParts.push(sanitize(footerPcCity))
+  if (emitter.email) footerParts.push(sanitize(emitter.email ?? ''))
+  if (emitter.phone) footerParts.push(sanitize(emitter.phone ?? ''))
+  if (emitter.website) footerParts.push(sanitize(emitter.website ?? ''))
+  const footerText = sanitize(footerParts.join('  ·  '))
   const fw = font.widthOfTextAtSize(footerText, 7)
   page.drawText(footerText, { x: (PAGE_W - fw) / 2, y: footerY - 10, size: 7, font, color: COLORS.footer })
 
+  const legalPenalties = (s as BillingSettingsWithBank).legalPenaltiesText?.trim() || DEFAULT_LEGAL_PENALTIES
+  const legalRecovery = (s as BillingSettingsWithBank).legalRecoveryFeeText?.trim() || DEFAULT_LEGAL_RECOVERY
   let legalY = footerY - 24
   if (tvaNonApplicable) {
     page.drawText('TVA non applicable, article 293 B du CGI', { x: MARGIN, y: legalY, size: 6, font, color: COLORS.footer })
     legalY -= 10
   }
-  page.drawText('Pénalités de retard exigibles en cas de non-paiement à la date d\'échéance. Taux appliqué : taux légal en vigueur.', { x: MARGIN, y: legalY, size: 6, font, color: COLORS.footer })
+  page.drawText(sanitize(legalPenalties), { x: MARGIN, y: legalY, size: 6, font, color: COLORS.footer })
   legalY -= 10
-  page.drawText('Indemnité forfaitaire pour frais de recouvrement : 40 € (article L. 441-10 du Code de commerce).', { x: MARGIN, y: legalY, size: 6, font, color: COLORS.footer })
+  page.drawText(sanitize(legalRecovery), { x: MARGIN, y: legalY, size: 6, font, color: COLORS.footer })
 
   const pdfBytes = await docPdf.save()
   return Buffer.from(pdfBytes)
+}
+
+export type CreditNoteWithRelations = CreditNote & {
+  client: Client | null
+  company: Company | null
+  invoice: { number: string } | null
+  lines: CreditNoteLine[]
+}
+
+export async function generateCreditNotePDF(
+  creditNote: CreditNoteWithRelations,
+  settings: BillingSettings,
+  pdfLib: PdfLibModule
+): Promise<Buffer> {
+  const doc = {
+    number: creditNote.number,
+    issueDate: creditNote.issueDate,
+    dueDate: null as string | null,
+    currency: creditNote.currency,
+    totalHT: creditNote.totalHT,
+    vatAmount: creditNote.vatAmount,
+    totalTTC: creditNote.totalTTC,
+    tvaNonApplicable: creditNote.tvaNonApplicable,
+    paymentTerms: null as string | null,
+    paymentMethod: creditNote.paymentMethod ?? null,
+    bankAccountId: creditNote.bankAccountId ?? null,
+    emitterProfileId: creditNote.emitterProfileId ?? null,
+  } as Invoice
+  const lines = creditNote.lines as unknown as InvoiceLine[]
+  const recipient = getRecipient(creditNote.client, creditNote.company)
+  const invoiceRef = creditNote.invoice ? `Facture d'origine : ${creditNote.invoice.number}` : undefined
+  return generateDocumentPDF(
+    'invoice',
+    doc,
+    lines,
+    settings,
+    recipient,
+    pdfLib,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    'AVOIR',
+    invoiceRef
+  )
 }

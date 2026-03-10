@@ -31,8 +31,8 @@ Application SaaS de facturation pour indépendants et entreprises. Créez devis 
 3. **Initialiser la base**
 
    ```bash
-   npx prisma db push
-   # ou pour des migrations : npx prisma migrate dev
+   npm run db:push
+   # ou pour des migrations : npm run db:migrate
    ```
 
 4. **Lancer le serveur**
@@ -42,6 +42,35 @@ Application SaaS de facturation pour indépendants et entreprises. Créez devis 
    ```
 
    Ouvrir [http://localhost:3000](http://localhost:3000).
+
+## Déploiement Vercel + Postgres
+
+1. **Créer la base sur Vercel**  
+   Sur [vercel.com](https://vercel.com) → ton projet → **Storage** → **Create Database** → **Postgres**. Vercel ajoute des variables (souvent `POSTGRES_URL`). Si seule `POSTGRES_URL` existe, ajoute dans **Settings → Environment Variables** une variable **`DATABASE_URL`** avec la même valeur que `POSTGRES_URL` (Prisma utilise `DATABASE_URL`).
+
+2. **Lier le projet en local** (si pas déjà fait)
+   ```bash
+   vercel link
+   ```
+
+3. **Récupérer les variables d’environnement** (dont `DATABASE_URL`)
+   ```bash
+   npm run env:pull
+   ```
+   Cela crée/met à jour `.env.local` avec les variables du projet Vercel.
+
+4. **Créer le schéma en base**
+   ```bash
+   npm run db:push
+   ```
+
+5. **Déployer**
+   ```bash
+   vercel deploy
+   # ou pousser sur main pour un déploiement automatique
+   ```
+
+En production, Vercel injecte les variables d’environnement ; inutile de commiter `.env.local`.
 
 ## Fonctionnalités
 

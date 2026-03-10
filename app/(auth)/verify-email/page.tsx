@@ -14,6 +14,7 @@ function VerifyEmailForm() {
   const searchParams = useSearchParams()
   const emailParam = searchParams.get('email') ?? ''
   const [email, setEmail] = useState(emailParam)
+  const [resentCode, setResentCode] = useState<string | null>(null)
 
   useEffect(() => {
     setEmail(emailParam)
@@ -61,7 +62,12 @@ function VerifyEmailForm() {
         setError(data.error || 'Impossible d\'envoyer un nouveau code')
       } else {
         setError('')
-        alert('Nouveau code envoyé. Vérifiez votre boîte mail.')
+        if (data.verificationCode) {
+          setResentCode(data.verificationCode)
+        }
+        if (!data.verificationCode) {
+          alert('Nouveau code envoyé. Vérifiez votre boîte mail (et les spams).')
+        }
       }
     } catch {
       setError('Erreur réseau')
@@ -101,6 +107,12 @@ function VerifyEmailForm() {
         <p className="text-[var(--muted)] text-sm mb-6">
           Entrez le code à 6 chiffres envoyé à votre adresse email.
         </p>
+        {resentCode && (
+          <div className="mb-4 p-4 rounded-lg border-2 border-[var(--border)] bg-[var(--border)]/20 text-center">
+            <p className="text-sm text-[var(--muted)] mb-1">Votre code (si vous ne recevez pas l’email, utilisez celui-ci) :</p>
+            <p className="font-mono text-2xl font-bold tracking-widest text-[var(--foreground)]">{resentCode}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -148,7 +160,7 @@ function VerifyEmailForm() {
             disabled={resendLoading || !email}
             className="w-full py-2 text-sm text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-50"
           >
-            {resendLoading ? 'Envoi…' : 'Renvoyer le code'}
+            {resendLoading ? 'Envoi…' : 'Renvoyer le code de vérification par email'}
           </button>
         </form>
 

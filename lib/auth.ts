@@ -7,7 +7,10 @@ export type SessionUser = {
   email?: string | null
   image?: string | null
   planType?: string
+  subscriptionPlan?: string
+  billingCycle?: string | null
   emailVerified?: boolean
+  role?: string
 }
 
 /**
@@ -25,7 +28,7 @@ export async function getSession() {
  * Vérifie que l'utilisateur est connecté et que l'email est vérifié (pour login email/password).
  * Redirige ou retourne null selon le contexte.
  */
-export async function requireSession(): Promise<{ id: string; email: string | null; name: string | null; planType: string } | null> {
+export async function requireSession(): Promise<{ id: string; email: string | null; name: string | null; planType: string; subscriptionPlan: string; role?: string } | null> {
   const session = await getSession()
   if (!session?.user?.id) return null
   const u = session.user as SessionUser
@@ -34,5 +37,14 @@ export async function requireSession(): Promise<{ id: string; email: string | nu
     email: u.email ?? null,
     name: u.name ?? null,
     planType: u.planType ?? 'free',
+    subscriptionPlan: u.subscriptionPlan ?? 'starter',
+    role: u.role ?? 'user',
   }
+}
+
+/** Vérifie que l'utilisateur est admin. Retourne la session ou null. Utiliser pour protéger les routes /admin et API admin. */
+export async function requireAdmin(): Promise<{ id: string; email: string | null; name: string | null; role: string } | null> {
+  const session = await requireSession()
+  if (!session || (session as { role?: string }).role !== 'admin') return null
+  return session as { id: string; email: string | null; name: string | null; role: string }
 }

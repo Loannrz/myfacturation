@@ -6,13 +6,17 @@ import { logBillingActivity } from '@/lib/billing-activity'
 
 export const dynamic = 'force-dynamic'
 
-function formatInvoiceNumber(n: number) {
-  const y = new Date().getFullYear()
-  return `F-${y}-${String(n).padStart(4, '0')}`
+function formatDateFR(iso: string): string {
+  const parts = iso.trim().split(/[-T]/)
+  if (parts.length >= 3) {
+    const [y, m, d] = parts
+    return `${d!.padStart(2, '0')}/${m!.padStart(2, '0')}/${y}`
+  }
+  return iso
 }
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await requireSession()
@@ -23,8 +27,14 @@ export async function POST(
     include: { client: true, company: true, lines: true },
   })
   if (!quote) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 })
-  const nextNum = await getNextInvoiceNumber(session.id)
-  const number = formatInvoiceNumber(nextNum)
+
+  const body = await req.json().catch(() => ({}))
+  const signedDateStr = (body.signedDate as string) || new Date().toISOString().slice(0, 10)
+  const signedAt = new Date(signedDateStr)
+
+  const refLine = `Facture venant du devis ${quote.number} émis le ${formatDateFR(quote.issueDate)} signé le ${formatDateFR(signedDateStr)}`
+
+  const number = await getNextInvoiceNumber(session.id)
   const invoice = await prisma.invoice.create({
     data: {
       userId: session.id,
@@ -38,27 +48,40 @@ export async function POST(
       currency: quote.currency,
       paymentTerms: quote.paymentTerms,
       paymentMethod: quote.paymentMethod,
+      bankAccountId: quote.bankAccountId,
+      emitterProfileId: quote.emitterProfileId,
       totalHT: quote.totalHT,
       vatAmount: quote.vatAmount,
       totalTTC: quote.totalTTC,
       tvaNonApplicable: quote.tvaNonApplicable,
       lines: {
-        create: quote.lines.map((l) => ({
-          type: l.type,
-          description: l.description,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          vatRate: l.vatRate,
-          discount: l.discount,
-          total: l.total,
-        })),
+        create: [
+          {
+            type: 'service',
+            description: refLine,
+            quantity: 1,
+            unitPrice: 0,
+            vatRate: 0,
+            discount: 0,
+            total: 0,
+          },
+          ...quote.lines.map((l) => ({
+            type: l.type,
+            description: l.description,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            vatRate: l.vatRate,
+            discount: l.discount,
+            total: l.total,
+          })),
+        ],
       },
     },
     include: { client: true, company: true, lines: true },
   })
   await prisma.quote.update({
     where: { id: quoteId },
-    data: { status: 'signed' },
+    data: { status: 'signed', signedAt },
   })
   await logBillingActivity(session.id, 'quote converted to invoice', 'quote', quoteId, { invoiceId: invoice.id, invoiceNumber: invoice.number })
   await logBillingActivity(session.id, 'invoice created', 'invoice', invoice.id, { number: invoice.number, fromQuote: true })

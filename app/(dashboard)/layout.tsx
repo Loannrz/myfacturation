@@ -13,17 +13,38 @@ import {
   Menu,
   X,
   LogOut,
+  Activity,
+  Package,
+  FilePlus2,
+  RotateCcw,
+  Banknote,
+  Sparkles,
+  Shield,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { canAccessFeature } from '@/lib/features'
+import { canAccessFeatureByPlan, effectiveSubscriptionPlan } from '@/lib/subscription'
 import { ThemeToggle } from '@/app/theme-toggle'
 
-const nav = [
+type NavItem = {
+  href: string
+  label: string
+  icon: typeof LayoutDashboard
+  feature?: keyof typeof import('@/lib/subscription').PLAN_FEATURES
+  businessOnly?: boolean
+}
+
+const nav: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/formules', label: 'Formules', icon: Sparkles },
+  { href: '/activite', label: 'Activité', icon: Activity, businessOnly: true },
+  { href: '/creer', label: 'Créer devis / facture', icon: FilePlus2 },
   { href: '/factures', label: 'Factures', icon: Receipt },
+  { href: '/avoirs', label: 'Avoirs', icon: RotateCcw, feature: 'creditNotes' },
   { href: '/devis', label: 'Devis', icon: FileText },
   { href: '/clients', label: 'Clients', icon: Users },
-  { href: '/comptabilite', label: 'Comptabilité', icon: Wallet, premium: true },
+  { href: '/produits', label: 'Produits', icon: Package, feature: 'products' },
+  { href: '/depenses', label: 'Dépenses', icon: Banknote, feature: 'expenses' },
+  { href: '/comptabilite', label: 'Comptabilité', icon: Wallet, feature: 'accounting' },
   { href: '/parametres', label: 'Paramètres', icon: Settings },
 ]
 
@@ -51,6 +72,17 @@ export default function DashboardLayout({
   }
 
   const planType = (session.user as { planType?: string })?.planType ?? 'free'
+  const subscriptionPlan = (session.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
+  const role = (session.user as { role?: string })?.role ?? 'user'
+  const effectivePlan = effectiveSubscriptionPlan(subscriptionPlan as 'starter' | 'pro' | 'business', role)
+
+  const isLocked = (item: NavItem) => {
+    if (item.businessOnly) return !canAccessFeatureByPlan(effectivePlan, 'activityHistory')
+    if (item.feature) return !canAccessFeatureByPlan(effectivePlan, item.feature)
+    return false
+  }
+  const lockTooltip = (item: NavItem) =>
+    item.businessOnly ? 'Disponible dans la formule Business.' : 'Disponible dans la formule Pro ou Business.'
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex">
@@ -62,13 +94,27 @@ export default function DashboardLayout({
           </Link>
         </div>
         <nav className="p-4 space-y-0.5">
-          {nav.map(({ href, label, icon: Icon, premium }) => {
-            if (premium && !canAccessFeature(planType as 'free' | 'premium', 'accounting')) {
+          {role === 'admin' && (
+            <Link
+              href="/admin"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                pathname?.startsWith('/admin') ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'text-amber-600 dark:text-amber-400 hover:bg-[var(--border)]/20'
+              }`}
+            >
+              <Shield className="w-4 h-4 shrink-0" />
+              Admin
+            </Link>
+          )}
+          {nav.map((item) => {
+            const { href, label, icon: Icon } = item
+            const key = href
+            const locked = isLocked(item)
+            if (locked) {
               return (
                 <span
-                  key={href}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--muted)] cursor-not-allowed"
-                  title="Fonctionnalité Premium"
+                  key={key}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--muted)] cursor-not-allowed opacity-75"
+                  title={lockTooltip(item)}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   {label}
@@ -78,7 +124,7 @@ export default function DashboardLayout({
             const isActive = pathname === href || (href !== '/dashboard' && pathname?.startsWith(href))
             return (
               <Link
-                key={href}
+                key={key}
                 href={href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                   isActive ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)] hover:bg-[var(--border)]/20 hover:text-[var(--foreground)]'
@@ -128,10 +174,19 @@ export default function DashboardLayout({
           <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setMobileOpen(false)} />
           <aside className="fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-[var(--background)] border-r border-[var(--border)] md:hidden pt-14">
             <nav className="p-4 space-y-0.5">
-              {nav.map(({ href, label, icon: Icon, premium }) => {
-                if (premium && !canAccessFeature(planType as 'free' | 'premium', 'accounting')) {
+              {role === 'admin' && (
+                <Link href="/admin" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-amber-600 dark:text-amber-400">
+                  <Shield className="w-4 h-4" />
+                  Admin
+                </Link>
+              )}
+              {nav.map((item) => {
+                const { href, label, icon: Icon } = item
+                const key = href
+                const locked = isLocked(item)
+                if (locked) {
                   return (
-                    <span key={href} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--muted)]">
+                    <span key={key} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--muted)] opacity-75" title={lockTooltip(item)}>
                       <Icon className="w-4 h-4" />
                       {label}
                     </span>
@@ -140,7 +195,7 @@ export default function DashboardLayout({
                 const isActive = pathname === href || (href !== '/dashboard' && pathname?.startsWith(href))
                 return (
                   <Link
-                    key={href}
+                    key={key}
                     href={href}
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${

@@ -51,12 +51,22 @@ model User {
   emailVerified        DateTime?
   image                String?
   passwordHash         String?   // pour login email/password
-  verificationCode     String?   // code à 6 chiffres
+  verificationCode     String?   // code à 6 chiffres (vérification email)
   verificationCodeExp  DateTime? // expiration du code
-  planType             String    @default("free")   // free | premium
+  resetPasswordCode    String?   // code pour réinitialisation mot de passe
+  resetPasswordCodeExp DateTime? // expiration du code reset
+  phone                String?   // téléphone (profil)
+  newEmailPending      String?   // nouvel email en attente de vérification
+  newEmailCode         String?   // code envoyé au nouvel email
+  newEmailCodeExp      DateTime? // expiration du code
+  planType             String    @default("free")   // free | premium (dérivé de subscription_plan)
+  subscriptionPlan     String    @default("starter") // starter | pro | business
+  billingCycle         String?   // monthly | yearly
   subscriptionStatus   String?   // null | active | cancelled | past_due (pour Stripe plus tard)
   subscriptionStart   DateTime?
   subscriptionEnd     DateTime?
+  role                String    @default("user")   // user | admin
+  suspended           Boolean   @default(false)
   createdAt            DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   accounts            Account[]
@@ -65,10 +75,37 @@ model User {
   companies            Company[]
   quotes               Quote[]
   invoices             Invoice[]
+  creditNotes          CreditNote[]
   expenses             Expense[]
   activityLogs         ActivityLog[]
   billingSettings      BillingSettings?
   billingProducts      BillingProduct[]
+}
+
+// ——— Admin: plans et permissions ———
+model Plan {
+  id          String   @id @default(cuid())
+  key         String   @unique  // starter | pro | business
+  name        String
+  priceMonthly Int     @default(0)
+  priceYearly Int     @default(0)
+  description String? @db.Text
+  enabled     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  features    PlanFeature[]
+}
+
+model PlanFeature {
+  id       String  @id @default(cuid())
+  planKey  String  // starter | pro | business
+  feature  String  // factures | devis | produits | clients | avoirs | ...
+  enabled  Boolean @default(true)
+  limit_   Int?    // null = illimité (pour factures/devis)
+  plan     Plan    @relation(fields: [planKey], references: [key], onDelete: Cascade)
+  @@unique([planKey, feature])
+  @@map("plan_features")
 }
 
 // ——— Facturation (multi-tenant: userId partout) ———
@@ -76,7 +113,7 @@ model User {
 model Client {
   id              String    @id @default(cuid())
   userId          String
-  type            String    // "particulier" | "professionnel"
+  type            String    // "particulier" | "professionnel" | "association" | "entreprise"
   firstName       String
   lastName        String
   email           String
@@ -97,6 +134,7 @@ model Client {
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   quotes         Quote[]
   invoices       Invoice[]
+  creditNotes    CreditNote[]
   @@index([userId])
 }
 
@@ -119,6 +157,8 @@ model Company {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   quotes      Quote[]
   invoices    Invoice[]
+  creditNotes CreditNote[]
+  expenses    Expense[]
   @@index([userId])
 }
 
@@ -134,10 +174,13 @@ model Quote {
   currency         String       @default("EUR")
   paymentTerms     String?
   paymentMethod    String?
+  bankAccountId    String?
+  emitterProfileId String?
   totalHT          Float        @default(0)
   vatAmount        Float        @default(0)
   totalTTC         Float        @default(0)
   tvaNonApplicable Boolean      @default(false)
+  signedAt        DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -175,6 +218,8 @@ model Invoice {
   currency         String         @default("EUR")
   paymentTerms     String?
   paymentMethod    String?
+  bankAccountId    String?
+  emitterProfileId String?
   totalHT          Float          @default(0)
   vatAmount        Float          @default(0)
   totalTTC         Float          @default(0)
@@ -187,6 +232,7 @@ model Invoice {
   company          Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
   quote            Quote?        @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   lines            InvoiceLine[]
+  creditNotes      CreditNote[]
   @@unique([userId, number])
   @@index([userId])
 }
@@ -204,19 +250,68 @@ model InvoiceLine {
   invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 
-model Expense {
-  id           String   @id @default(cuid())
-  userId       String
-  date         String
-  amount       Float
-  category     String
-  description  String?
-  supplier     String?
-  invoiceFile  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model CreditNote {
+  id               String           @id @default(cuid())
+  userId           String
+  number           String
+  status           String           @default("draft") // draft | sent | refunded | cancelled
+  invoiceId        String?          // facture d'origine
+  clientId        String?
+  companyId       String?
+  issueDate       String
+  currency        String           @default("EUR")
+  totalHT         Float            @default(0)
+  vatAmount       Float            @default(0)
+  totalTTC        Float            @default(0)
+  tvaNonApplicable Boolean         @default(false)
+  reason           String?         // motif (remboursement, annulation partielle, etc.)
+  refundedAt       DateTime?      // date du remboursement quand status = refunded
+  emitterProfileId String?
+  bankAccountId   String?
+  paymentMethod   String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoice         Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  client          Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  lines           CreditNoteLine[]
+  @@unique([userId, number])
   @@index([userId])
+  @@index([invoiceId])
+}
+
+model CreditNoteLine {
+  id          String     @id @default(cuid())
+  creditNoteId String
+  type        String     @default("service")
+  description String
+  quantity    Float      @default(1)
+  unitPrice   Float
+  vatRate     Float      @default(20)
+  discount    Float      @default(0)
+  total       Float
+  creditNote  CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id             String    @id @default(cuid())
+  userId         String
+  companyId      String?   // société liée (optionnel)
+  bankAccountId  String?   // id du compte (BillingSettings.bankAccounts JSON)
+  date           String
+  amount         Float
+  category       String
+  description    String?
+  supplier       String?
+  invoiceFile    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company        Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  @@index([userId])
+  @@index([companyId])
+  @@index([bankAccountId])
 }
 
 model ActivityLog {
@@ -232,26 +327,46 @@ model ActivityLog {
 }
 
 model BillingSettings {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  companyName        String?
-  legalStatus        String?
-  siret              String?
-  vatNumber          String?
-  address            String?
-  phone              String?
-  email              String?
-  website            String?
-  logoUrl            String?
-  bankAccountHolder  String?
-  bankName           String?
-  bankIban           String?
-  bankBic            String?
-  nextInvoiceNumber  Int      @default(1)
-  nextQuoteNumber    Int      @default(1)
-  expenseCategories  String?  // JSON array
-  updatedAt          DateTime @updatedAt
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  companyName           String?
+  legalStatus           String?
+  siret                 String?
+  vatNumber             String?
+  apeCode               String?  // code APE / NAF
+  address               String?
+  postalCode            String?
+  city                  String?
+  country               String?
+  phone                 String?
+  email                 String?
+  website               String?
+  logoUrl               String?
+  bankAccountHolder     String?
+  bankName              String?
+  bankIban              String?
+  bankBic               String?
+  bankAccounts          String?  // JSON array of { id, name, accountHolder, bankName, iban, bic }
+  emitterProfiles       String?  // JSON array (id, companyName, legalStatus, siret, vatNumber?, apeCode?, address, postalCode, city, country?, phone?, email?, website?)
+  nextInvoiceNumber     Int      @default(1)
+  nextQuoteNumber       Int      @default(1)
+  nextCreditNoteNumber  Int      @default(1)
+  invoiceNumberMiddle   String?
+  invoiceNumberFormat   String?  // sequential | ddmm_seq | year_seq
+  invoicePrefix         String?  // préfixe facture (ex: F)
+  quoteNumberMiddle     String?
+  quoteNumberFormat     String?
+  quotePrefix           String?  // préfixe devis (ex: D)
+  creditNumberMiddle    String?
+  creditNumberFormat    String?
+  creditNotePrefix      String?  // préfixe avoir (ex: A)
+  defaultPaymentMethod  String?  // mode de paiement par défaut
+  defaultPaymentTerms   String?  // conditions de paiement (ex: 30 jours)
+  legalPenaltiesText    String?  // texte pénalités de retard
+  legalRecoveryFeeText  String?  // texte indemnité forfaitaire recouvrement
+  expenseCategories     String?
+  updatedAt             DateTime @updatedAt
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model BillingProduct {

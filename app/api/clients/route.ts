@@ -30,30 +30,60 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(clients)
 }
 
+const LEGAL_TYPES = ['professionnel', 'association', 'entreprise']
+
+function isLegalType(t: string): boolean {
+  return LEGAL_TYPES.includes(t)
+}
+
 export async function POST(req: NextRequest) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   try {
     const body = await req.json()
+    const type = (body.type ?? 'particulier') as string
+
+    if (isLegalType(type)) {
+      const required: Record<string, string> = {
+        companyName: 'Raison sociale',
+        siret: 'SIRET',
+        firstName: 'Prénom',
+        lastName: 'Nom',
+        email: 'Email',
+        address: 'Adresse',
+        postalCode: 'Code postal',
+        city: 'Ville',
+      }
+      const missing = Object.entries(required).filter(([key]) => !(body[key] ?? '').toString().trim())
+      if (missing.length) {
+        return NextResponse.json(
+          { error: `Champs obligatoires pour un client ${type} : ${missing.map(([, label]) => label).join(', ')}` },
+          { status: 400 }
+        )
+      }
+    } else if (!(body.email ?? '').toString().trim()) {
+      return NextResponse.json({ error: 'L’email est obligatoire.' }, { status: 400 })
+    }
+
     const client = await prisma.client.create({
       data: {
         userId: session.id,
-        type: body.type ?? 'particulier',
-        firstName: body.firstName ?? '',
-        lastName: body.lastName ?? '',
-        email: body.email ?? '',
-        phone: body.phone ?? undefined,
-        address: body.address ?? undefined,
-        postalCode: body.postalCode ?? undefined,
-        city: body.city ?? undefined,
+        type: type || 'particulier',
+        firstName: (body.firstName ?? '').toString().trim(),
+        lastName: (body.lastName ?? '').toString().trim(),
+        email: (body.email ?? '').toString().trim(),
+        phone: body.phone ? String(body.phone).trim() : undefined,
+        address: body.address ? String(body.address).trim() : undefined,
+        postalCode: body.postalCode ? String(body.postalCode).trim() : undefined,
+        city: body.city ? String(body.city).trim() : undefined,
         country: body.country ?? undefined,
         language: body.language ?? 'fr',
         notes: body.notes ?? undefined,
-        companyName: body.companyName ?? undefined,
+        companyName: body.companyName ? String(body.companyName).trim() : undefined,
         companyAddress: body.companyAddress ?? undefined,
-        siret: body.siret ?? undefined,
-        vatNumber: body.vatNumber ?? undefined,
-        legalForm: body.legalForm ?? undefined,
+        siret: body.siret ? String(body.siret).trim() : undefined,
+        vatNumber: body.vatNumber ? String(body.vatNumber).trim() : undefined,
+        legalForm: body.legalForm ? String(body.legalForm).trim() : undefined,
       },
     })
     await logBillingActivity(session.id, 'client created', 'client', client.id, { name: `${client.firstName} ${client.lastName}` })

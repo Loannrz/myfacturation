@@ -33,3 +33,5 @@ prisma/migrations/**/migration_lock.toml
 # Misc
 .DS_Store
 *.pem
+.vercel
+.env*.local

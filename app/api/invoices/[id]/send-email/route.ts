@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBillingSettings } from '@/lib/billing-settings'
 import { generateInvoicePDF } from '@/lib/billing-pdf'
+import { loadPdfLib } from '@/lib/load-pdf-lib'
 import { sendMail } from '@/lib/smtp'
 import { logBillingActivity } from '@/lib/billing-activity'
 import { buildBillingEmailHtml } from '@/lib/billing-email-template'
@@ -45,7 +46,8 @@ export async function POST(
     return NextResponse.json({ error: 'Aucune adresse email pour ce client/société' }, { status: 400 })
   }
   const settings = await getBillingSettings(session.id)
-  const pdf = await generateInvoicePDF(invoice, settings)
+  const pdfLib = await loadPdfLib()
+  const pdf = await generateInvoicePDF(invoice, settings, pdfLib)
   const companyName = settings.companyName || 'Myfacturation'
   const amountStr = `${invoice.totalTTC.toFixed(2)} ${invoice.currency}`
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || ''

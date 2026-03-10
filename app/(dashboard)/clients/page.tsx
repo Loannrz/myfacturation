@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Users, Plus, Search } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
 
 type Client = {
   id: string
@@ -13,23 +13,47 @@ type Client = {
   companyName: string | null
 }
 
+const TYPE_LABELS: Record<string, string> = {
+  particulier: 'Particulier',
+  professionnel: 'Professionnel',
+  association: 'Association',
+  entreprise: 'Entreprise',
+}
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  useEffect(() => {
+  const loadClients = () => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     fetch(`/api/clients?${params}`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setClients)
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    setLoading(true)
+    loadClients()
   }, [q])
 
   const displayName = (c: Client) => {
     const name = [c.firstName, c.lastName].filter(Boolean).join(' ')
     return name || c.companyName || c.email || '—'
+  }
+
+  const handleDelete = async (c: Client) => {
+    if (!confirm(`Supprimer le client « ${displayName(c)} » ?`)) return
+    setDeletingId(c.id)
+    try {
+      const res = await fetch(`/api/clients/${c.id}`, { method: 'DELETE' })
+      if (res.ok) setClients((prev) => prev.filter((x) => x.id !== c.id))
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -73,6 +97,7 @@ export default function ClientsPage() {
                 <th className="text-left py-3 px-4 text-sm font-medium">Nom</th>
                 <th className="text-left py-3 px-4 text-sm font-medium">Email</th>
                 <th className="text-left py-3 px-4 text-sm font-medium">Type</th>
+                <th className="text-right py-3 px-4 text-sm font-medium w-28">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -81,7 +106,27 @@ export default function ClientsPage() {
                   <td className="py-3 px-4 text-sm font-medium">{displayName(c)}</td>
                   <td className="py-3 px-4 text-sm text-[var(--muted)]">{c.email}</td>
                   <td className="py-3 px-4 text-sm text-[var(--muted)]">
-                    {c.type === 'professionnel' ? 'Professionnel' : 'Particulier'}
+                    {TYPE_LABELS[c.type] ?? c.type}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <div className="inline-flex items-center gap-1">
+                      <Link
+                        href={`/clients/${c.id}/modifier`}
+                        className="p-2 rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--border)]/30"
+                        title="Modifier"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(c)}
+                        disabled={deletingId === c.id}
+                        className="p-2 rounded-lg text-[var(--muted)] hover:text-red-600 hover:bg-red-500/10 disabled:opacity-50"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
