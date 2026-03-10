@@ -35,7 +35,6 @@ type NavItem = {
 
 const nav: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/formules', label: 'Formules', icon: Sparkles },
   { href: '/activite', label: 'Activité', icon: Activity, businessOnly: true },
   { href: '/creer', label: 'Créer devis / facture', icon: FilePlus2 },
   { href: '/factures', label: 'Factures', icon: Receipt },
@@ -45,6 +44,7 @@ const nav: NavItem[] = [
   { href: '/produits', label: 'Produits', icon: Package, feature: 'products' },
   { href: '/depenses', label: 'Dépenses', icon: Banknote, feature: 'expenses' },
   { href: '/comptabilite', label: 'Comptabilité', icon: Wallet, feature: 'accounting' },
+  { href: '/formules', label: 'Formules', icon: Sparkles },
   { href: '/parametres', label: 'Paramètres', icon: Settings },
 ]
 

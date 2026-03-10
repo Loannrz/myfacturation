@@ -1,4 +1,4 @@
-// Myfacturation — Multi-tenant SaaS facturation
+// MyFacturation360 — Multi-tenant SaaS facturation
 // NextAuth + billing (userId sur toutes les entités)
 
 generator client {
@@ -62,9 +62,11 @@ model User {
   planType             String    @default("free")   // free | premium (dérivé de subscription_plan)
   subscriptionPlan     String    @default("starter") // starter | pro | business
   billingCycle         String?   // monthly | yearly
-  subscriptionStatus   String?   // null | active | cancelled | past_due (pour Stripe plus tard)
+  subscriptionStatus   String?   // null | active | cancelled | past_due (Stripe)
   subscriptionStart   DateTime?
   subscriptionEnd     DateTime?
+  stripeCustomerId    String?   // Stripe customer id (cus_xxx)
+  stripeSubscriptionId String?  // Stripe subscription id (sub_xxx)
   role                String    @default("user")   // user | admin
   suspended           Boolean   @default(false)
   createdAt            DateTime  @default(now())

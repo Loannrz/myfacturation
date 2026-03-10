@@ -20,6 +20,9 @@ export async function GET() {
       planType: true,
       subscriptionPlan: true,
       billingCycle: true,
+      subscriptionStatus: true,
+      subscriptionEnd: true,
+      stripeSubscriptionId: true,
       emailVerified: true,
     },
   })

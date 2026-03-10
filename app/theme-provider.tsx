@@ -6,7 +6,7 @@ type Theme = 'dark' | 'light'
 
 const ThemeContext = createContext<{ theme: Theme; setTheme: (t: Theme) => void; toggle: () => void } | null>(null)
 
-const STORAGE_KEY = 'myfacturation-theme'
+const STORAGE_KEY = 'myfacturation360-theme'
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark')

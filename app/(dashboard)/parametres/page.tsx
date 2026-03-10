@@ -309,6 +309,11 @@ export default function ParametresPage() {
         {subscriptionPlan === 'business' && (
           <p className="text-sm text-[var(--muted)]">Toutes les fonctionnalités sont débloquées.</p>
         )}
+        <p className="text-sm text-[var(--muted)] mt-4">
+          <Link href="/settings/billing" className="text-violet-600 dark:text-violet-400 hover:underline">
+            Facturation & abonnement
+          </Link>
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">

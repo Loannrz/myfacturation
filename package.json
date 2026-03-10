@@ -1,5 +1,5 @@
 {
-  "name": "myfacturation",
+  "name": "myfacturation360",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -29,7 +29,8 @@
     "pdf-lib": "^1.17.1",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "stripe": "^20.4.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

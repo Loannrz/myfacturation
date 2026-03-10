@@ -37,13 +37,30 @@ export default function FormulesPage() {
   const handleChoosePlan = async (plan: 'pro' | 'business') => {
     setLoading(plan)
     try {
-      const res = await fetch('/api/subscription', {
-        method: 'PATCH',
+      const planKey = `${plan}_${yearly ? 'yearly' : 'monthly'}` as 'pro_monthly' | 'pro_yearly' | 'business_monthly' | 'business_yearly'
+      const res = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscriptionPlan: plan, billingCycle: yearly ? 'yearly' : 'monthly' }),
+        body: JSON.stringify({ plan: planKey }),
       })
-      if (res.ok) {
-        window.location.href = '/parametres?upgraded=' + plan
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
+      if (res.status === 503 || (data.error && data.error.includes('Stripe'))) {
+        // Fallback démo sans Stripe : mise à jour manuelle
+        const fallback = await fetch('/api/subscription', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscriptionPlan: plan, billingCycle: yearly ? 'yearly' : 'monthly' }),
+        })
+        if (fallback.ok) window.location.href = '/parametres?upgraded=' + plan
+        else setLoading(null)
+        return
+      }
+      if (!res.ok) {
+        alert(data.error || 'Erreur')
       }
     } finally {
       setLoading(null)

@@ -4,7 +4,7 @@ import { Providers } from './providers'
 import { ThemeProvider } from './theme-provider'
 
 export const metadata: Metadata = {
-  title: 'Myfacturation – La facturation simple',
+  title: 'MyFacturation360 – La facturation simple',
   description: 'Créez devis et factures en quelques secondes.',
 }
 
@@ -18,7 +18,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var t=localStorage.getItem('myfacturation-theme');document.documentElement.classList.add(t==='light'?'light':'dark');})();`,
+            __html: `(function(){var t=localStorage.getItem('myfacturation360-theme');document.documentElement.classList.add(t==='light'?'light':'dark');})();`,
           }}
         />
       </head>
