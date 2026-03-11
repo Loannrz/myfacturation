@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBillingSettings, parseBankAccounts } from '@/lib/billing-settings'
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
   const to = req.nextUrl.searchParams.get('to') ?? undefined
   const bankAccountId = req.nextUrl.searchParams.get('bankAccountId') ?? undefined
   const search = req.nextUrl.searchParams.get('search')?.trim() ?? undefined
-  const where: { userId: string; category?: string; bankAccountId?: string | null; date?: { gte?: string; lte?: string }; AND?: unknown[] } = { userId: session.id }
+  const where: Prisma.ExpenseWhereInput = { userId: session.id }
   if (category) where.category = category
   if (bankAccountId) where.bankAccountId = bankAccountId
   if (from || to) {
