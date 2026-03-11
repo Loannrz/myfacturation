@@ -148,10 +148,6 @@ export default function ParametresPage() {
     }
     if (parametresInitialFetchDone) return
     parametresInitialFetchDone = true
-    // #region agent log
-    initialEffectRuns.current += 1
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'parametres/page.tsx:initialEffect',message:'parametres initial effect run',data:{run:initialEffectRuns.current},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     let cancelled = false
     Promise.all([fetch('/api/me').then((r) => r.json()), fetch('/api/settings').then((r) => r.json())])
       .then(([user, settings]) => {
@@ -175,9 +171,6 @@ export default function ParametresPage() {
   useEffect(() => {
     const onVisible = () => {
       visibilityHandlerRuns.current += 1
-      // #region agent log
-      fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'parametres/page.tsx:visibilityHandler',message:'visibilitychange fired',data:{run:visibilityHandlerRuns.current},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       fetch('/api/me')
         .then((r) => r.json())
         .then((user) => {
@@ -191,9 +184,6 @@ export default function ParametresPage() {
         })
         .catch(() => {})
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'parametres/page.tsx:visibilityEffect',message:'visibility effect run (add listener)',data:{},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [updateSession])

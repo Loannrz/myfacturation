@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { stripe, getPriceIdForPlan, STRIPE_PRICE_ENV_KEYS, type StripePlanKey } from '@/lib/stripe'
-import { planTypeFromSubscription } from '@/lib/subscription'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,10 +38,41 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.id },
-      select: { email: true, stripeCustomerId: true, hasUsedTrial: true },
+      select: {
+        email: true,
+        stripeCustomerId: true,
+        hasUsedTrial: true,
+        stripeSubscriptionId: true,
+        subscriptionStatus: true,
+        subscriptionPlan: true,
+        billingCycle: true,
+      },
     })
     if (!user) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 })
     const hasUsedTrial = (user as { hasUsedTrial?: boolean }).hasUsedTrial ?? false
+    const stripeSubscriptionId = (user as { stripeSubscriptionId?: string | null }).stripeSubscriptionId
+    const subscriptionStatus = (user as { subscriptionStatus?: string | null }).subscriptionStatus
+    const currentPlan = (user as { subscriptionPlan?: string }).subscriptionPlan ?? 'starter'
+    const currentCycle = (user as { billingCycle?: string | null }).billingCycle ?? 'monthly'
+
+    const activeStatuses = ['active', 'trialing', 'past_due']
+    if (stripeSubscriptionId && subscriptionStatus && activeStatuses.includes(subscriptionStatus)) {
+      let stripeStatusOk = false
+      try {
+        const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId)
+        stripeStatusOk = activeStatuses.includes(sub.status)
+      } catch {
+        // Abonnement supprimé côté Stripe : on autorise un nouveau checkout
+      }
+      if (stripeStatusOk) {
+        return NextResponse.json({
+          hasExistingSubscription: true,
+          currentPlan: currentPlan === 'pro' || currentPlan === 'business' ? currentPlan : null,
+          currentCycle: currentCycle === 'yearly' ? 'yearly' : 'monthly',
+          message: 'Un abonnement est déjà actif. Utilisez "Changer de formule" pour modifier votre plan.',
+        })
+      }
+    }
 
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||

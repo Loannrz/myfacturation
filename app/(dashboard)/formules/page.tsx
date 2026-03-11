@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Check, X, Zap, Crown, Sparkles } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import { useSession } from 'next-auth/react'
+
+type PlanChoice = 'pro' | 'business'
+type StripePlanKey = 'pro_monthly' | 'pro_yearly' | 'business_monthly' | 'business_yearly'
 
 const PRICING = {
   starter: { monthly: 0, yearly: 0 },
@@ -34,6 +37,12 @@ export default function FormulesPage() {
   const [yearly, setYearly] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
+  const [existingSubscriptionChoice, setExistingSubscriptionChoice] = useState<{
+    plan: PlanChoice
+    planKey: StripePlanKey
+    label: string
+  } | null>(null)
+  const [changePlanLoading, setChangePlanLoading] = useState(false)
   const currentPlan = (session?.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
   const isPaidPlan = currentPlan === 'pro' || currentPlan === 'business'
   const [hasUsedTrial, setHasUsedTrial] = useState(false)
@@ -45,21 +54,29 @@ export default function FormulesPage() {
       .catch(() => {})
   }, [status])
 
-  const handleChoosePlan = async (plan: 'pro' | 'business') => {
+  const handleChoosePlan = async (plan: PlanChoice) => {
     setLoading(plan)
+    setExistingSubscriptionChoice(null)
     try {
-      const planKey = `${plan}_${yearly ? 'yearly' : 'monthly'}` as 'pro_monthly' | 'pro_yearly' | 'business_monthly' | 'business_yearly'
+      const planKey = `${plan}_${yearly ? 'yearly' : 'monthly'}` as StripePlanKey
       const res = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: planKey }),
       })
-      let data: { url?: string; error?: string }
+      let data: { url?: string; error?: string; hasExistingSubscription?: boolean; currentPlan?: string; currentCycle?: string; message?: string }
       try {
         const text = await res.text()
         data = text ? JSON.parse(text) : {}
       } catch {
         data = { error: res.status === 500 ? 'Erreur serveur. Vérifiez les logs ou la configuration Stripe.' : 'Réponse invalide' }
+      }
+      if (data.hasExistingSubscription) {
+        const cycleLabel = yearly ? 'annuel' : 'mensuel'
+        const planLabel = plan === 'business' ? 'Business' : 'Pro'
+        setExistingSubscriptionChoice({ plan, planKey, label: `${planLabel} (${cycleLabel})` })
+        setLoading(null)
+        return
       }
       if (data.url) {
         window.location.href = data.url
@@ -85,6 +102,41 @@ export default function FormulesPage() {
       }
     } finally {
       setLoading(null)
+    }
+  }
+
+  const handleChangePlanConfirm = async () => {
+    if (!existingSubscriptionChoice) return
+    setChangePlanLoading(true)
+    try {
+      const res = await fetch('/api/stripe/change-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: existingSubscriptionChoice.planKey }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok) {
+        setExistingSubscriptionChoice(null)
+        window.location.href = '/parametres?upgraded=' + (data.subscriptionPlan || existingSubscriptionChoice.plan)
+        return
+      }
+      alert(data.error || 'Impossible de changer de formule.')
+    } finally {
+      setChangePlanLoading(false)
+    }
+  }
+
+  const handleOpenPortal = async () => {
+    try {
+      const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
+      alert(data.error || 'Impossible d\'ouvrir le portail de facturation.')
+    } catch {
+      alert('Erreur lors de l\'ouverture du portail.')
     }
   }
 
@@ -121,6 +173,44 @@ export default function FormulesPage() {
           Commencez gratuitement puis évoluez selon vos besoins.
         </p>
       </div>
+
+      {/* Modal : abonnement existant — changer de formule ou gérer */}
+      {existingSubscriptionChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="existing-subscription-title">
+          <div className="bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h2 id="existing-subscription-title" className="text-lg font-semibold text-[var(--foreground)] mb-2">
+              Abonnement déjà actif
+            </h2>
+            <p className="text-[var(--muted)] mb-6">
+              Vous avez déjà un abonnement actif. Souhaitez-vous passer à la formule {existingSubscriptionChoice.label} ou gérer votre abonnement dans le portail Stripe ?
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={handleChangePlanConfirm}
+                disabled={changePlanLoading}
+                className="flex-1 px-4 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-medium disabled:opacity-50 transition-colors"
+              >
+                {changePlanLoading ? 'Changement…' : `Changer pour ${existingSubscriptionChoice.label}`}
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenPortal}
+                className="flex-1 px-4 py-3 rounded-xl border-2 border-[var(--border)] font-medium text-[var(--foreground)] hover:bg-[var(--border)]/20 transition-colors"
+              >
+                Gérer mon abonnement
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExistingSubscriptionChoice(null)}
+              className="mt-4 w-full py-2 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Toggle Mensuel / Annuel */}
       <div className="flex justify-center mb-10">

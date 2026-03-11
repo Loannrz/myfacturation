@@ -13,16 +13,9 @@ export function BillingSuccessUI({ syncResult, sessionId }: { syncResult: SyncRe
   const plan = syncResult.ok ? syncResult.plan : undefined
   const cycle = syncResult.ok ? syncResult.cycle : undefined
 
-  // #region agent log
-  useEffect(() => {
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'BillingSuccessUI.tsx:mount',message:'client received',data:{syncOk:syncResult.ok,syncReason:(syncResult as {reason?:string}).reason},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-  }, [syncResult.ok, (syncResult as {reason?:string}).reason]);
-  // #endregion
-
   useEffect(() => {
     if (didUpdate.current || !syncResult.ok || plan == null) return
     didUpdate.current = true
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'BillingSuccessUI.tsx:updateSession',message:'calling updateSession',data:{plan},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
     updateSession?.({ subscriptionPlan: plan, billingCycle: cycle ?? null }).catch(() => {})
   }, [syncResult.ok, plan, cycle, updateSession])
 

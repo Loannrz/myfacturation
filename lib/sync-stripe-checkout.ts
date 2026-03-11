@@ -9,9 +9,6 @@ export type SyncResult = { ok: true; plan: string; cycle: string; status: string
  * Utilisable côté serveur (page success, API) pour appliquer la formule tout de suite.
  */
 export async function syncUserFromStripeCheckout(userId: string, sessionId: string): Promise<SyncResult> {
-  // #region agent log
-  fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'sync-stripe-checkout.ts:entry',message:'sync entry',data:{userIdLen:userId?.length,sessionIdPrefix:sessionId?.slice(0,9)},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-  // #endregion
   if (!stripe) return { ok: false, reason: 'Stripe non configuré' }
   if (!sessionId?.startsWith('cs_')) return { ok: false, reason: 'session_id invalide' }
 
@@ -29,10 +26,6 @@ export async function syncUserFromStripeCheckout(userId: string, sessionId: stri
           : null
     if (!subId) return { ok: false, reason: 'Abonnement pas encore créé' }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'sync-stripe-checkout.ts:afterRetrieve',message:'checkout retrieved',data:{status:checkoutSession.status,metaUserIdLen:metaUserId.length,hasSubId:!!subId},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-
     const sub = await stripe.subscriptions.retrieve(subId, { expand: ['items.data.price'] })
     const subData = sub as unknown as {
       status: string
@@ -45,9 +38,6 @@ export async function syncUserFromStripeCheckout(userId: string, sessionId: stri
     const planKeyFromMeta = checkoutSession.metadata?.planKey as string | undefined
     let mapping = planFromPriceId(priceId)
     if (!mapping) mapping = mappingFromPlanKey(planKeyFromMeta)
-    // #region agent log
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'sync-stripe-checkout.ts:afterMapping',message:'mapping',data:{hasMapping:!!mapping,plan:mapping?.plan,priceIdPrefix:priceId?.slice(0,12),planKeyFromMeta:!!planKeyFromMeta},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     if (!mapping) return { ok: false, reason: 'Formule non reconnue' }
 
     const planType = planTypeFromSubscription(mapping.plan)
@@ -79,16 +69,10 @@ export async function syncUserFromStripeCheckout(userId: string, sessionId: stri
       } as Parameters<typeof prisma.user.update>[0]['data'],
     })
 
-    // #region agent log
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'sync-stripe-checkout.ts:success',message:'sync ok',data:{plan:mapping.plan,cycle:mapping.cycle},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     return { ok: true, plan: mapping.plan, cycle: mapping.cycle, status: subscriptionStatus }
   } catch (e) {
     console.error('[sync-stripe-checkout]', e)
     const reason = e instanceof Error ? e.message : 'Erreur sync'
-    // #region agent log
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'sync-stripe-checkout.ts:catch',message:'sync error',data:{reason},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     return { ok: false, reason }
   }
 }
