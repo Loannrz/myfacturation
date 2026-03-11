@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Search, Eye, Mail, UserPlus, Send, ChevronDown } from 'lucide-react'
+import { Search, Eye, Mail, UserPlus, Send, ChevronDown, Trash2 } from 'lucide-react'
 
 type UserRow = {
   id: string
@@ -33,6 +33,7 @@ export default function AdminUsersPage() {
   const [createMessage, setCreateMessage] = useState('')
   const [emailMenuOpen, setEmailMenuOpen] = useState<string | null>(null)
   const [sendingEmail, setSendingEmail] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const EMAIL_OPTIONS = [
     { id: 'welcome', label: 'Email bienvenue' },
@@ -103,6 +104,19 @@ export default function AdminUsersPage() {
   }
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR')
+
+  const deleteUser = (userId: string, userName: string | null) => {
+    if (!confirm(`Supprimer définitivement le compte ${userName || userId} et toutes ses données ?`)) return
+    setDeletingId(userId)
+    fetch(`/api/admin/users/${userId}`, { method: 'DELETE' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) alert(data.error)
+        else setUsers((prev) => prev.filter((u) => u.id !== userId))
+      })
+      .catch(() => alert('Erreur'))
+      .finally(() => setDeletingId(null))
+  }
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault()
@@ -276,6 +290,16 @@ export default function AdminUsersPage() {
                       >
                         <Mail className="w-3 h-3" />
                         {sendingReset === u.id ? '…' : 'Reset email'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteUser(u.id, u.name ?? u.email)}
+                        disabled={!!deletingId}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-red-200 text-red-600 text-xs hover:bg-red-50 disabled:opacity-50"
+                        title="Supprimer le compte"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        {deletingId === u.id ? '…' : 'Supprimer'}
                       </button>
                       <div className="relative inline-block">
                         <button
