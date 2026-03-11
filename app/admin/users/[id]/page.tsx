@@ -91,38 +91,14 @@ export default function AdminUserDetailPage() {
   }
 
   const deleteUser = () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'app/admin/users/[id]/page.tsx:deleteUser',message:'deleteUser called',data:{id},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
-    if (!confirm('Supprimer définitivement ce compte et toutes ses données ?')) {
-      // #region agent log
-      fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'app/admin/users/[id]/page.tsx:confirm',message:'confirm cancelled',data:{confirmed:false},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
-      return
-    }
-    // #region agent log
-    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'app/admin/users/[id]/page.tsx:fetch',message:'DELETE fetch starting',data:{confirmed:true},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
+    if (!confirm('Supprimer définitivement ce compte et toutes ses données ?')) return
     fetch(`/api/admin/users/${id}`, { method: 'DELETE' })
-      .then((r) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'app/admin/users/[id]/page.tsx:response',message:'DELETE response',data:{status:r.status,ok:r.ok,contentType:r.headers.get('content-type')},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
-        return r.json()
-      })
+      .then((r) => r.json())
       .then((data) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'app/admin/users/[id]/page.tsx:parsed',message:'DELETE parsed',data:{hasError:!!data?.error,error:data?.error,willRedirect:!data?.error},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
         if (data.error) setMessage(data.error)
         else router.push('/admin/users')
       })
-      .catch((err) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'app/admin/users/[id]/page.tsx:catch',message:'DELETE catch',data:{err:String(err)},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
-        // #endregion
-        setMessage('Erreur')
-      })
+      .catch(() => setMessage('Erreur'))
   }
 
   const sendResetEmail = () => {

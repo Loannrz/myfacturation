@@ -15,11 +15,13 @@ import {
   MessageCircle,
   Mail,
   FileText,
+  MailX,
 } from 'lucide-react'
 
 const adminNav = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/users', label: 'Utilisateurs', icon: Users },
+  { href: '/admin/deleted-emails', label: 'Emails supprimés', icon: MailX },
   { href: '/admin/subscriptions', label: 'Abonnements', icon: CreditCard },
   { href: '/admin/invoices', label: 'Factures', icon: FileText },
   { href: '/admin/plans', label: 'Plans', icon: Package },
