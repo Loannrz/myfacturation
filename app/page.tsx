@@ -60,12 +60,6 @@ export default function HomePage() {
               >
                 Créer un compte gratuitement
               </Link>
-              <a
-                href="#demo"
-                className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 rounded-xl border-2 border-[var(--border)] font-semibold hover:bg-[var(--border)]/20 transition-colors text-base"
-              >
-                Voir une démo
-              </a>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-[var(--muted)]">
               <span className="inline-flex items-center gap-2">
@@ -82,8 +76,8 @@ export default function HomePage() {
               </span>
             </div>
           </div>
-          {/* Dashboard mockup */}
-          <div id="demo" className="mt-16 md:mt-24 rounded-2xl border border-[var(--border)] bg-[var(--border)]/10 overflow-hidden shadow-2xl max-w-5xl mx-auto">
+          {/* Dashboard mockup — données illustratives (non réelles) */}
+          <div className="mt-16 md:mt-24 rounded-2xl border border-[var(--border)] bg-[var(--border)]/10 overflow-hidden shadow-2xl max-w-5xl mx-auto">
             <div className="h-10 flex items-center gap-2 px-4 border-b border-[var(--border)] bg-[var(--background)]/80">
               <span className="w-3 h-3 rounded-full bg-[var(--muted)]/50" />
               <span className="w-3 h-3 rounded-full bg-[var(--muted)]/50" />
@@ -102,21 +96,16 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="lg:col-span-4 space-y-4">
-                <h3 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider">Statistiques</h3>
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--background)]/60 p-4 space-y-3">
+                <h3 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider">Avec Myfacturation360</h3>
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--background)]/60 p-4 space-y-4">
                   <div>
-                    <p className="text-xs text-[var(--muted)]">Chiffre d&apos;affaires ce mois</p>
-                    <p className="text-xl font-semibold">4 190 €</p>
+                    <p className="text-2xl font-semibold">+ 1 762 893 €</p>
+                    <p className="text-xs text-[var(--muted)]">facturés par nos utilisateurs</p>
                   </div>
                   <div>
-                    <p className="text-xs text-[var(--muted)]">Factures envoyées</p>
-                    <p className="text-xl font-semibold">12</p>
+                    <p className="text-2xl font-semibold">+ 20 000</p>
+                    <p className="text-xs text-[var(--muted)]">clients satisfaits</p>
                   </div>
-                </div>
-                <h3 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider">Clients</h3>
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--background)]/60 p-4">
-                  <p className="text-2xl font-semibold">24</p>
-                  <p className="text-xs text-[var(--muted)]">clients enregistrés</p>
                 </div>
               </div>
             </div>

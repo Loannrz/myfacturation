@@ -132,6 +132,10 @@ export interface PaymentSuccessEmailData {
   billingDate: string
   planLabel: string
   dashboardUrl: string
+  /** Pièce jointe : facture PDF (buffer). Si fourni, le mail inclut la facture en PJ. */
+  invoicePdfBuffer?: Buffer
+  /** Nom du fichier pour la PJ (ex. facture-ABO-2024-001.pdf) */
+  invoicePdfFilename?: string
 }
 
 export function buildPaymentSuccessEmailHtml(data: PaymentSuccessEmailData): string {
@@ -139,6 +143,7 @@ export function buildPaymentSuccessEmailHtml(data: PaymentSuccessEmailData): str
   const content = `
     <p style="margin: 0 0 20px 0; font-size: 16px; color: #1a1a1a;">${escapeHtml(name)},</p>
     <p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Votre paiement a bien été enregistré.</p>
+    ${data.invoicePdfBuffer && data.invoicePdfFilename ? `<p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Votre facture est jointe à cet email (PDF).</p>` : ''}
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 20px 0; background-color: #fafafa; border-radius: 6px; border: 1px solid #eeeeee;">
       <tr>
         <td style="padding: 20px 24px;">

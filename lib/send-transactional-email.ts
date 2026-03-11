@@ -65,11 +65,16 @@ export async function sendTrialEndingEmail(to: string, data: TrialEndingEmailDat
 export async function sendPaymentSuccessEmail(to: string, data: PaymentSuccessEmailData): Promise<SendResult> {
   const dashboardUrl = data.dashboardUrl.startsWith('http') ? data.dashboardUrl : `${base}/dashboard`
   const html = buildPaymentSuccessEmailHtml({ ...data, dashboardUrl })
+  const attachments =
+    data.invoicePdfBuffer && data.invoicePdfFilename
+      ? [{ filename: data.invoicePdfFilename, content: data.invoicePdfBuffer, mimeType: 'application/pdf' as const }]
+      : undefined
   const res = await sendMail({
     to,
     subject: 'Paiement reçu – Facturation',
     html,
     action: 'transactional-payment-success',
+    attachments,
   })
   return { ok: res.ok, error: res.error }
 }

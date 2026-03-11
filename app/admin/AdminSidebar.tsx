@@ -14,12 +14,14 @@ import {
   Lock,
   MessageCircle,
   Mail,
+  FileText,
 } from 'lucide-react'
 
 const adminNav = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/users', label: 'Utilisateurs', icon: Users },
   { href: '/admin/subscriptions', label: 'Abonnements', icon: CreditCard },
+  { href: '/admin/invoices', label: 'Factures', icon: FileText },
   { href: '/admin/plans', label: 'Plans', icon: Package },
   { href: '/admin/features', label: 'Permissions', icon: Key },
   { href: '/admin/emails', label: 'Emails', icon: Mail },

@@ -4,6 +4,8 @@ import { stripe, planFromPriceId, mappingFromPlanKey } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { planTypeFromSubscription } from '@/lib/subscription'
 import { sendTrialStartEmail, sendPaymentSuccessEmail, sendCancellationEmail } from '@/lib/send-transactional-email'
+import { generateSubscriptionInvoicePDF } from '@/lib/subscription-invoice-pdf'
+import { loadPdfLib } from '@/lib/load-pdf-lib'
 import Stripe from 'stripe'
 
 export const dynamic = 'force-dynamic'
@@ -162,12 +164,40 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
       : ''
     const planLabel = user.subscriptionPlan === 'business' ? 'Business' : user.subscriptionPlan === 'pro' ? 'Pro' : 'Starter'
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+
+    let invoicePdfBuffer: Buffer | undefined
+    let invoicePdfFilename: string | undefined
+    try {
+      const pdfLib = await loadPdfLib()
+      const invoiceNumber = invoice.number || `FAC-ABO-${invoice.id?.replace('in_', '')?.slice(0, 12) || Date.now()}`
+      const issueDate = invoice.created != null ? new Date(invoice.created * 1000) : new Date()
+      const periodLabel = issueDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+      const description = `Abonnement ${planLabel} – ${periodLabel}`
+      invoicePdfBuffer = await generateSubscriptionInvoicePDF(
+        {
+          invoiceNumber,
+          issueDate,
+          customerName: user.name || 'Client',
+          customerEmail: user.email,
+          description,
+          amountCents: invoice.amount_paid ?? 0,
+          currency: (invoice.currency ?? 'eur').toLowerCase(),
+        },
+        pdfLib
+      )
+      invoicePdfFilename = `facture-${invoiceNumber.replace(/[^\w.-]/g, '_')}.pdf`
+    } catch (pdfErr) {
+      console.error('[webhook] subscription invoice PDF', pdfErr)
+    }
+
     sendPaymentSuccessEmail(user.email, {
       recipientName: user.name,
       amount: amountPaid,
       billingDate,
       planLabel,
       dashboardUrl: `${baseUrl.replace(/\/$/, '')}/dashboard`,
+      invoicePdfBuffer,
+      invoicePdfFilename,
     }).catch((err) => console.error('[webhook] payment success email', err))
   }
 }
