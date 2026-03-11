@@ -120,7 +120,14 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 }
 
 async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
-  const userId = sub.metadata?.userId
+  let userId = sub.metadata?.userId as string | undefined
+  if (!userId) {
+    const user = await prisma.user.findFirst({
+      where: { stripeSubscriptionId: sub.id },
+      select: { id: true },
+    })
+    userId = user?.id ?? undefined
+  }
   if (!userId) return
 
   const subData = sub as unknown as { status: string; current_period_start: number; current_period_end: number; items: { data: Array<{ price?: { id?: string } }> } }
@@ -153,7 +160,14 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
 }
 
 async function handleSubscriptionDeleted(sub: Stripe.Subscription) {
-  const userId = sub.metadata?.userId
+  let userId = sub.metadata?.userId as string | undefined
+  if (!userId) {
+    const user = await prisma.user.findFirst({
+      where: { stripeSubscriptionId: sub.id },
+      select: { id: true },
+    })
+    userId = user?.id ?? undefined
+  }
   if (!userId) return
 
   await prisma.user.update({
