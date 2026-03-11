@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { Pencil, Trash2, ExternalLink, Wallet } from 'lucide-react'
+import { Pencil, Trash2, ExternalLink, Wallet, Search } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { CreateExpenseModal } from '../components/CreateExpenseModal'
 import { UpgradeGate } from '../components/UpgradeGate'
@@ -13,6 +13,22 @@ const EXPENSE_CATEGORIES = [
   { value: 'Logiciel', label: 'Logiciel' },
   { value: 'Marketing', label: 'Marketing' },
   { value: 'Autre', label: 'Autre' },
+] as const
+
+const MONTHS = [
+  { value: '', label: 'Tous les mois' },
+  { value: '01', label: 'Janvier' },
+  { value: '02', label: 'Février' },
+  { value: '03', label: 'Mars' },
+  { value: '04', label: 'Avril' },
+  { value: '05', label: 'Mai' },
+  { value: '06', label: 'Juin' },
+  { value: '07', label: 'Juillet' },
+  { value: '08', label: 'Août' },
+  { value: '09', label: 'Septembre' },
+  { value: '10', label: 'Octobre' },
+  { value: '11', label: 'Novembre' },
+  { value: '12', label: 'Décembre' },
 ] as const
 
 type Expense = {
@@ -38,6 +54,14 @@ function formatDateFR(d: string) {
   return `${day}/${m}/${y}`
 }
 
+function lastDayOfMonth(year: number, month: number): string {
+  const d = new Date(year, month, 0)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export default function DepensesPage() {
   const { data: session, status } = useSession()
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -45,13 +69,28 @@ export default function DepensesPage() {
   const [forbidden, setForbidden] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const currentYear = new Date().getFullYear()
+  const [filterYear, setFilterYear] = useState(currentYear)
+  const [filterMonth, setFilterMonth] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')
 
   const plan = (session?.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
   const canAccounting = plan === 'pro' || plan === 'business'
 
-  const fetchExpenses = () => {
-    const year = new Date().getFullYear()
-    fetch(`/api/expenses?from=${year}-01-01&to=${year}-12-31`)
+  const fetchExpenses = useCallback(() => {
+    setLoading(true)
+    const from = filterMonth
+      ? `${filterYear}-${filterMonth}-01`
+      : `${filterYear}-01-01`
+    const to = filterMonth
+      ? lastDayOfMonth(filterYear, parseInt(filterMonth, 10))
+      : `${filterYear}-12-31`
+    const params = new URLSearchParams({ from, to })
+    if (filterCategory) params.set('category', filterCategory)
+    if (searchQuery.trim()) params.set('search', searchQuery.trim())
+    fetch(`/api/expenses?${params}`)
       .then((r) => {
         if (r.status === 403) {
           setForbidden(true)
@@ -61,7 +100,7 @@ export default function DepensesPage() {
       })
       .then(setExpenses)
       .finally(() => setLoading(false))
-  }
+  }, [filterYear, filterMonth, filterCategory, searchQuery])
 
   useEffect(() => {
     if (status !== 'authenticated') return
@@ -71,7 +110,7 @@ export default function DepensesPage() {
       return
     }
     fetchExpenses()
-  }, [status, canAccounting])
+  }, [status, canAccounting, fetchExpenses])
 
   const deleteExpense = async (id: string) => {
     if (!confirm('Supprimer cette dépense ?')) return
@@ -100,12 +139,14 @@ export default function DepensesPage() {
     )
   }
 
+  const applySearch = () => setSearchQuery(searchInput)
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dépenses</h1>
-          <p className="text-[var(--muted)] text-sm mt-1">Toutes vos dépenses (année en cours)</p>
+          <p className="text-[var(--muted)] text-sm mt-1">Filtrez par année, mois, catégorie ou recherchez dans la description et le fournisseur.</p>
         </div>
         <button
           type="button"
@@ -115,6 +156,64 @@ export default function DepensesPage() {
           <Wallet className="w-4 h-4" />
           Créer une dépense
         </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-[var(--muted)]">Année</label>
+          <select
+            value={filterYear}
+            onChange={(e) => setFilterYear(Number(e.target.value))}
+            className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm"
+          >
+            {Array.from({ length: 6 }, (_, i) => currentYear - i).map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-[var(--muted)]">Mois</label>
+          <select
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm"
+          >
+            {MONTHS.map((m) => (
+              <option key={m.value || 'all'} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-[var(--muted)]">Catégorie</label>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm"
+          >
+            <option value="">Toutes</option>
+            {EXPENSE_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+          <Search className="w-4 h-4 text-[var(--muted)] shrink-0" />
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), applySearch())}
+            placeholder="Rechercher (description, fournisseur)"
+            className="flex-1 min-w-0 px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm"
+          />
+          <button
+            type="button"
+            onClick={applySearch}
+            className="px-4 py-2 rounded-lg bg-[var(--border)]/30 hover:bg-[var(--border)]/50 text-sm font-medium"
+          >
+            Rechercher
+          </button>
+        </div>
       </div>
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] overflow-hidden">

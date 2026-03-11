@@ -11,6 +11,7 @@ type BankAccount = { id: string; name: string; accountHolder: string; bankName: 
 type EmitterProfile = { id: string; name: string; companyName: string }
 type InvoiceOption = { id: string; number: string }
 type LineState = { description: string; quantity: number; unitPrice: number; vatRate: number; discount: number }
+type Product = { id: string; name: string; description: string; unitPrice: number; vatRate: number; discount: number }
 
 export default function ModifierAvoirPage() {
   const router = useRouter()
@@ -19,6 +20,7 @@ export default function ModifierAvoirPage() {
   const [clients, setClients] = useState<{ id: string; firstName: string; lastName: string; companyName: string | null }[]>([])
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
   const [invoices, setInvoices] = useState<InvoiceOption[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
   const [emitterProfiles, setEmitterProfiles] = useState<EmitterProfile[]>([])
   const [emitterProfileId, setEmitterProfileId] = useState('')
@@ -47,8 +49,9 @@ export default function ModifierAvoirPage() {
       fetch('/api/clients').then((r) => (r.ok ? r.json() : [])),
       fetch('/api/companies').then((r) => (r.ok ? r.json() : [])),
       fetch('/api/invoices').then((r) => (r.ok ? r.json() : [])).then((list: { id: string; number: string }[]) => list.map((i) => ({ id: i.id, number: i.number }))),
+      fetch('/api/products').then((r) => (r.ok ? r.json() : [])),
       fetch('/api/settings').then((r) => (r.ok ? r.json() : null)),
-    ]).then(([cn, clientsList, companiesList, invoicesList, settings]) => {
+    ]).then(([cn, clientsList, companiesList, invoicesList, productsList, settings]) => {
       if (!cn) {
         setNotFound(true)
         setLoadingCn(false)
@@ -58,6 +61,7 @@ export default function ModifierAvoirPage() {
       setClients(clientsList)
       setCompanies(companiesList)
       setInvoices(invoicesList)
+      setProducts(Array.isArray(productsList) ? productsList : [])
       setBankAccounts(Array.isArray(settings?.bankAccounts) ? settings.bankAccounts : [])
       const profiles = Array.isArray(settings?.emitterProfiles) ? settings.emitterProfiles : []
       setEmitterProfiles(profiles)
@@ -86,6 +90,15 @@ export default function ModifierAvoirPage() {
   }, [id])
 
   const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: 20, discount: 0 }])
+  const addProductAsLine = (product: Product) => {
+    setLines((l) => [...l, {
+      description: product.name,
+      quantity: 1,
+      unitPrice: product.unitPrice,
+      vatRate: product.vatRate,
+      discount: product.discount,
+    }])
+  }
   const removeLine = (i: number) => setLines((l) => l.filter((_, idx) => idx !== i))
   const updateLine = (i: number, field: string, value: string | number) => {
     setLines((l) => l.map((line, idx) => (idx === i ? { ...line, [field]: value } : line)))
@@ -258,9 +271,30 @@ export default function ModifierAvoirPage() {
         </div>
 
         <div className="border border-[var(--border)] rounded-xl p-6 bg-[var(--background)]">
-          <div className="flex justify-between items-center gap-2 mb-4">
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
             <h2 className="text-sm font-medium text-[var(--foreground)]">Lignes</h2>
-            <button type="button" onClick={addLine} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">+ Ligne</button>
+            <div className="flex items-center gap-2">
+              {products.length > 0 && (
+                <select
+                  className="text-sm px-2 py-1.5 border border-[var(--border)] rounded-lg bg-[var(--background)]"
+                  value=""
+                  onChange={(e) => {
+                    const productId = e.target.value
+                    if (productId) {
+                      const p = products.find((x) => x.id === productId)
+                      if (p) addProductAsLine(p)
+                      e.target.value = ''
+                    }
+                  }}
+                >
+                  <option value="">+ Ajouter un produit</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} — {p.unitPrice.toFixed(2)} €</option>
+                  ))}
+                </select>
+              )}
+              <button type="button" onClick={addLine} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">+ Ligne</button>
+            </div>
           </div>
           <div className="space-y-3">
             <div className="grid grid-cols-12 gap-2 text-sm font-medium text-[var(--muted)] pb-1">

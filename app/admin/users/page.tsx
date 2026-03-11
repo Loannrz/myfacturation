@@ -125,6 +125,10 @@ export default function AdminUsersPage() {
       setCreateMessage('Email et mot de passe requis.')
       return
     }
+    if (!createName.trim()) {
+      setCreateMessage('Le nom est obligatoire.')
+      return
+    }
     if (createPassword.length < 8) {
       setCreateMessage('Le mot de passe doit contenir au moins 8 caractères.')
       return
@@ -133,10 +137,10 @@ export default function AdminUsersPage() {
     fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+        body: JSON.stringify({
         email: createEmail.trim().toLowerCase(),
         password: createPassword,
-        name: createName.trim() || undefined,
+        name: createName.trim(),
       }),
     })
       .then((r) => r.json())
@@ -216,12 +220,13 @@ export default function AdminUsersPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-[var(--muted)] mb-1">Nom (optionnel)</label>
+              <label className="block text-sm text-[var(--muted)] mb-1">Nom *</label>
               <input
                 type="text"
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
                 placeholder="Jean Dupont"
+                required
                 className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm"
               />
             </div>

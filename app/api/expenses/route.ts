@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
   const from = req.nextUrl.searchParams.get('from') ?? undefined
   const to = req.nextUrl.searchParams.get('to') ?? undefined
   const bankAccountId = req.nextUrl.searchParams.get('bankAccountId') ?? undefined
-  const where: { userId: string; category?: string; bankAccountId?: string | null; date?: { gte?: string; lte?: string } } = { userId: session.id }
+  const search = req.nextUrl.searchParams.get('search')?.trim() ?? undefined
+  const where: { userId: string; category?: string; bankAccountId?: string | null; date?: { gte?: string; lte?: string }; AND?: unknown[] } = { userId: session.id }
   if (category) where.category = category
   if (bankAccountId) where.bankAccountId = bankAccountId
   if (from || to) {
@@ -24,9 +25,15 @@ export async function GET(req: NextRequest) {
     if (from) where.date.gte = from
     if (to) where.date.lte = to
   }
+  if (search) {
+    where.AND = [
+      { OR: [{ description: { contains: search, mode: 'insensitive' } }, { supplier: { contains: search, mode: 'insensitive' } }] },
+    ]
+  }
   const expenses = await prisma.expense.findMany({
     where,
     orderBy: { date: 'desc' },
+    include: { company: { select: { id: true, name: true } } },
   })
   return NextResponse.json(expenses)
 }

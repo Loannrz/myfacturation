@@ -219,6 +219,23 @@ export async function GET(req: NextRequest) {
       amount,
     }))
 
+  // Avoirs (credit notes) par mois pour le tooltip
+  const creditNotesByMonth: Record<string, number> = {}
+  for (let i = start; i <= end; i++) {
+    const y = Math.floor(i / 12)
+    const m = (i % 12) + 1
+    creditNotesByMonth[`${y}-${String(m).padStart(2, '0')}`] = 0
+  }
+  allCreditNotesForCharts.forEach((cn) => {
+    const key = cn.issueDate.slice(0, 7)
+    if (!monthInRange(key)) return
+    if (!creditNotesByMonth[key]) creditNotesByMonth[key] = 0
+    creditNotesByMonth[key] += cn.totalTTC
+  })
+  const creditNotesByMonthArray = Object.entries(creditNotesByMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({ month, amount }))
+
   return NextResponse.json({
     from,
     to,
@@ -237,5 +254,6 @@ export async function GET(req: NextRequest) {
     revenueByMonth: revenueByMonthArray,
     revenueByYear: revenueByYearArray,
     expensesByMonth: expensesByMonthArray,
+    creditNotesByMonth: creditNotesByMonthArray,
   })
 }

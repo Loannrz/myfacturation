@@ -98,30 +98,48 @@ const statusLabels: Record<string, string> = {
   completed: 'Effectué',
 }
 
-/** Tooltip unifié style Dashboard : période + infos au survol */
-function RevenueChartTooltip({
+type ChartPoint = { month: string; label: string; revenue: number; expenses: number; creditNotes: number }
+
+/** Tooltip graphique Revenus + Dépenses avec détail avoir / dépenses */
+function RevenueExpensesChartTooltip({
   active,
   payload,
   label,
 }: {
   active?: boolean
-  payload?: Array<{ value: number; name?: string }>
+  payload?: Array<{ payload?: ChartPoint }>
   label?: string
 }) {
-  if (!active || !payload?.length || payload[0].value == null) return null
-  const value = payload[0].value
+  if (!active || !payload?.length || !label) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+  const net = point.revenue - point.expenses
+  const depensesTotal = point.creditNotes + point.expenses
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-lg px-4 py-3 text-sm min-w-[160px]">
-      <p className="font-medium text-[var(--foreground)] border-b border-[var(--border)]/50 pb-1.5 mb-2">{label ?? '—'}</p>
-      <p className="text-[var(--muted)]">
-        Revenus : <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatEuro(value)}</span>
-      </p>
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-lg px-4 py-3 text-sm min-w-[220px]">
+      <p className="font-medium text-[var(--foreground)] border-b border-[var(--border)]/50 pb-1.5 mb-2">{label}</p>
+      <div className="space-y-1">
+        <p className="text-[var(--muted)]">
+          Entrées (revenus nets) : <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatEuro(point.revenue)}</span>
+        </p>
+        <p className="text-[var(--muted)]">
+          Dépenses : <span className="font-semibold text-rose-600 dark:text-rose-400">{formatEuro(depensesTotal)}</span>
+          {(point.creditNotes > 0 || point.expenses > 0) && (
+            <span className="block text-xs mt-0.5 text-[var(--muted)]">
+              dont {formatEuro(point.creditNotes)} avoir, {formatEuro(point.expenses)} dépenses
+            </span>
+          )}
+        </p>
+        <p className="text-[var(--muted)] pt-1 border-t border-[var(--border)]/50 mt-1.5">
+          Total (solde) : <span className={`font-semibold ${net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatEuro(net)}</span>
+        </p>
+      </div>
     </div>
   )
 }
 
+/** Tooltip pour le graphique en barres Revenus vs Dépenses */
 type RevenueVsExpensesPoint = { month: string; label: string; revenue: number; expenses: number }
-
 function RevenueVsExpensesTooltip({
   active,
   payload,
@@ -140,7 +158,7 @@ function RevenueVsExpensesTooltip({
       <p className="font-medium text-[var(--foreground)] border-b border-[var(--border)]/50 pb-1.5 mb-2">{label}</p>
       <div className="space-y-1">
         <p className="text-[var(--muted)]">
-          Revenus : <span className="font-semibold text-blue-600 dark:text-blue-400">{formatEuro(point.revenue)}</span>
+          Revenus : <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatEuro(point.revenue)}</span>
         </p>
         <p className="text-[var(--muted)]">
           Dépenses : <span className="font-semibold text-rose-600 dark:text-rose-400">{formatEuro(point.expenses)}</span>
@@ -165,6 +183,7 @@ export default function ComptabilitePage() {
     revenueByMonth: { month: string; label: string; revenue: number }[]
     revenueByYear: { year: number; revenue: number }[]
     expensesByMonth: { month: string; label: string; amount: number }[]
+    creditNotesByMonth?: { month: string; amount: number }[]
   } | null>(null)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -179,6 +198,7 @@ export default function ComptabilitePage() {
   const [periodYear, setPeriodYear] = useState(currentYear)
   const [periodMonth, setPeriodMonth] = useState<number | ''>('') // '' = toute l'année par défaut
   const [chartYear, setChartYear] = useState(currentYear)
+  const [chartCurveFilter, setChartCurveFilter] = useState<'all' | 'revenue' | 'expenses'>('all')
   const [filterType, setFilterType] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterClientId, setFilterClientId] = useState('')
@@ -211,6 +231,26 @@ export default function ComptabilitePage() {
     if (periodMonth === '') return String(periodYear)
     return `${MONTHS[periodMonth - 1]} ${periodYear}`
   }, [periodYear, periodMonth])
+
+  /** Données fusionnées pour le graphique Revenus + Dépenses (avec avoir par mois) */
+  const chartData = useMemo((): ChartPoint[] => {
+    if (!overview?.revenueByMonth?.length) return []
+    const rev = overview.revenueByMonth
+    const exp = overview.expensesByMonth ?? []
+    const cnMap = new Map((overview.creditNotesByMonth ?? []).map((x) => [x.month, x.amount]))
+    return rev.map((r) => {
+      const expItem = exp.find((e) => e.month === r.month)
+      const expensesAmount = expItem?.amount ?? 0
+      const creditNotesAmount = cnMap.get(r.month) ?? 0
+      return {
+        month: r.month,
+        label: r.label,
+        revenue: r.revenue,
+        expenses: expensesAmount,
+        creditNotes: creditNotesAmount,
+      }
+    })
+  }, [overview])
 
   const fetchOverview = useCallback(() => {
     const params = new URLSearchParams()
@@ -511,47 +551,60 @@ export default function ComptabilitePage() {
             ))}
           </select>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-[var(--muted)]">Graphique</span>
+          <select
+            value={chartCurveFilter}
+            onChange={(e) => setChartCurveFilter(e.target.value as 'all' | 'revenue' | 'expenses')}
+            className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm min-w-[180px]"
+          >
+            <option value="all">Toutes les courbes</option>
+            <option value="revenue">Entrées uniquement</option>
+            <option value="expenses">Dépenses uniquement</option>
+          </select>
+        </div>
         <p className="text-sm font-medium text-[var(--foreground)] w-full mt-2 pt-2 border-t border-[var(--border)]">
           Période affichée : <span className="text-[var(--muted)] font-normal">{periodLabel}</span>
         </p>
       </div>
 
-      {/* ——— 2. Revenue analytics ——— */}
+      {/* ——— 2. Revenus et Dépenses (courbes) ——— */}
       <section>
-        <h2 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider mb-4">Revenus</h2>
+        <h2 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider mb-4">Revenus et dépenses</h2>
         <div className="p-6 rounded-xl border border-[var(--border)] bg-[var(--background)]">
-          <div className="flex flex-wrap gap-4 mb-4">
-            <select
-              value={chartYear}
-              onChange={(e) => setChartYear(parseInt(e.target.value, 10))}
-              className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm"
-            >
-              {[new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2].map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </div>
           <div className="h-[280px]">
-            {overview?.revenueByMonth?.length ? (
+            {chartData.length ? (
               <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={overview.revenueByMonth} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
                   <defs>
                     <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="rgb(16 185 129)" stopOpacity={0.4} />
                       <stop offset="100%" stopColor="rgb(16 185 129)" stopOpacity={0} />
                     </linearGradient>
+                    <linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="rgb(244 63 94)" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="rgb(244 63 94)" stopOpacity={0} />
+                    </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
                   <YAxis hide domain={['auto', 'auto']} />
-                  <Tooltip content={<RevenueChartTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                  <Area type="monotone" dataKey="revenue" name="Revenus" stroke="rgb(16 185 129)" strokeWidth={2} fill="url(#revGrad)" />
+                  <Tooltip content={<RevenueExpensesChartTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                  {(chartCurveFilter === 'all' || chartCurveFilter === 'revenue') && (
+                    <Area type="monotone" dataKey="revenue" name="Entrées" stroke="rgb(16 185 129)" strokeWidth={2} fill="url(#revGrad)" />
+                  )}
+                  {(chartCurveFilter === 'all' || chartCurveFilter === 'expenses') && (
+                    <Area type="monotone" dataKey="expenses" name="Dépenses" stroke="rgb(244 63 94)" strokeWidth={2} fill="url(#expGrad)" />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-[var(--muted)] text-sm">Aucune donnée de revenus sur la période</div>
+              <div className="flex items-center justify-center h-full text-[var(--muted)] text-sm">Aucune donnée sur la période</div>
             )}
           </div>
+          <p className="text-xs text-[var(--muted)] mt-4 pt-3 border-t border-[var(--border)]/50">
+            Courbe verte = Entrées (revenus nets). Courbe rouge = Dépenses.
+          </p>
         </div>
       </section>
 

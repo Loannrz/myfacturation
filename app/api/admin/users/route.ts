@@ -14,13 +14,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const email = (body.email as string)?.toLowerCase()?.trim()
     const password = body.password as string
-    const name = (body.name as string)?.trim() || null
+    const name = (body.name as string)?.trim() || ''
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'Email invalide' }, { status: 400 })
     }
     if (!password || password.length < 8) {
       return NextResponse.json({ error: 'Le mot de passe doit contenir au moins 8 caractères' }, { status: 400 })
+    }
+    if (!name) {
+      return NextResponse.json({ error: 'Le nom est obligatoire' }, { status: 400 })
     }
 
     const existing = await prisma.user.findUnique({ where: { email } })
@@ -32,7 +35,7 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.create({
       data: {
         email,
-        name: name || email.split('@')[0],
+        name,
         passwordHash: hash,
         emailVerified: new Date(),
         role: 'user',
