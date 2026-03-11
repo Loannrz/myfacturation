@@ -61,6 +61,7 @@ export function InvoiceQuotePreview({ type, recipientName, issueDate, dueDate, p
               <th className="text-left py-2 font-medium">Description</th>
               <th className="text-right py-2 font-medium">Qté</th>
               <th className="text-right py-2 font-medium">P.U.</th>
+              <th className="text-right py-2 font-medium">Remise %</th>
               <th className="text-right py-2 font-medium">TVA %</th>
               <th className="text-right py-2 font-medium">Total</th>
             </tr>
@@ -68,9 +69,10 @@ export function InvoiceQuotePreview({ type, recipientName, issueDate, dueDate, p
           <tbody>
             {lines.map((line, i) => (
               <tr key={i} className="border-t border-[var(--border)]/50">
-                <td className="py-2 pr-2 max-w-[200px] truncate" title={line.description}>{line.description || '—'}</td>
+                <td className="py-2 pr-2 max-w-[280px] whitespace-pre-line align-top" title={line.description}>{line.description || '—'}</td>
                 <td className="py-2 text-right">{line.quantity}</td>
                 <td className="py-2 text-right">{(Number(line.unitPrice) || 0).toFixed(2)} €</td>
+                <td className="py-2 text-right">{(Number(line.discount) || 0) > 0 ? `${line.discount} %` : '—'}</td>
                 <td className="py-2 text-right">{line.vatRate} %</td>
                 <td className="py-2 text-right font-medium">{computeLineTotal(line).toFixed(2)} €</td>
               </tr>

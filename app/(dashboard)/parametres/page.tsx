@@ -10,10 +10,10 @@ import { planLabel, canAccessFeatureByPlan, maxEstablishments, maxBankAccounts }
 type BankAccountEntry = { id: string; name: string; accountHolder: string; bankName: string; iban: string; bic: string }
 type EmitterProfileEntry = { id: string; name: string; companyName: string; legalStatus: string; siret: string; vatNumber?: string; apeCode?: string; address: string; postalCode: string; city: string; country?: string; phone?: string; email?: string; website?: string }
 
-const DEFAULT_BANK_ACCOUNT_HOLDER = 'myfacturation360 by myeventoo'
+const PLACEHOLDER_ACCOUNT_HOLDER = 'Dupont Michel'
 
 function newBankAccount(): BankAccountEntry {
-  return { id: crypto.randomUUID(), name: '', accountHolder: DEFAULT_BANK_ACCOUNT_HOLDER, bankName: '', iban: '', bic: '' }
+  return { id: crypto.randomUUID(), name: '', accountHolder: '', bankName: '', iban: '', bic: '' }
 }
 
 function newEmitterProfile(): EmitterProfileEntry {
@@ -711,7 +711,7 @@ export default function ParametresPage() {
                     value={acc.accountHolder}
                     onChange={(e) => setBankAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, accountHolder: e.target.value } : a)))}
                     className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
-                    placeholder={DEFAULT_BANK_ACCOUNT_HOLDER}
+                    placeholder={PLACEHOLDER_ACCOUNT_HOLDER}
                   />
                 </div>
                 <div>

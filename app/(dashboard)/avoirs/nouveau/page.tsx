@@ -170,7 +170,13 @@ export default function NouvelAvoirPage() {
       <h1 className="text-2xl font-semibold tracking-tight mb-2">Créer un avoir</h1>
       <p className="text-[var(--muted)] text-sm mb-8">Remboursement ou annulation partielle. Le CA (chiffre d&apos;affaires) du dashboard sera diminué du montant des avoirs.</p>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA' && (e.target as HTMLElement).getAttribute('type') !== 'submit') e.preventDefault()
+        }}
+        className="space-y-6"
+      >
         {emitterProfiles.length >= 1 && (
           <div className="border border-[var(--border)] rounded-xl p-6 bg-[var(--background)]">
             <h2 className="text-sm font-medium text-[var(--foreground)] mb-4">Émetteur</h2>
@@ -279,7 +285,7 @@ export default function NouvelAvoirPage() {
             {lines.map((line, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-4">
-                  <input type="text" value={line.description} onChange={(e) => updateLine(i, 'description', e.target.value)} placeholder="Description" className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm" />
+                  <textarea value={line.description} onChange={(e) => updateLine(i, 'description', e.target.value)} placeholder="Description" rows={1} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] resize-y min-h-[2.5rem]" />
                 </div>
                 <div className="col-span-1">
                   <input type="number" min={0} step={1} value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)} className="w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm" />
