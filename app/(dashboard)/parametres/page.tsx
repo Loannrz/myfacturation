@@ -77,6 +77,7 @@ export default function ParametresPage() {
   const [subscriptionPlan, setSubscriptionPlan] = useState<'starter' | 'pro' | 'business'>('starter')
   const [stripeSubscriptionId, setStripeSubscriptionId] = useState<string | null>(null)
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null)
+  const [subscriptionEnd, setSubscriptionEnd] = useState<string | null>(null)
   const [cancelSubscriptionLoading, setCancelSubscriptionLoading] = useState(false)
   const searchParams = useSearchParams()
   const { data: session, update: updateSession } = useSession()
@@ -105,6 +106,7 @@ export default function ParametresPage() {
     lastSyncedPlanRef.current = planVal
     setStripeSubscriptionId((user.stripeSubscriptionId as string) ?? null)
     setSubscriptionStatus((user.subscriptionStatus as string) ?? null)
+    setSubscriptionEnd(user.subscriptionEnd != null ? (typeof user.subscriptionEnd === 'string' ? user.subscriptionEnd : new Date((user.subscriptionEnd as Date).getTime()).toISOString()) : null)
     setAccountEmail((user.email as string) ?? '')
     setProfile({ name: (user.name as string) ?? '', email: (user.email as string) ?? '', phone: (user.phone as string) ?? '' })
     const emitters = Array.isArray(settings.emitterProfiles) ? settings.emitterProfiles : []
@@ -198,9 +200,22 @@ export default function ParametresPage() {
 
   useEffect(() => {
     const upgraded = searchParams.get('upgraded')
+    const resilie = searchParams.get('resilie')
     if (upgraded === 'pro' || upgraded === 'business') {
       setSubscriptionPlan(upgraded)
       setMessage('Formule mise à jour.')
+    }
+    if (resilie === '1') {
+      setMessage('Abonnement résilié. Vous gardez l’accès jusqu’à la fin de la période payée.')
+      fetch('/api/me')
+        .then((r) => r.json())
+        .then((user: Record<string, unknown>) => {
+          setSubscriptionPlan((user.subscriptionPlan === 'pro' || user.subscriptionPlan === 'business' ? user.subscriptionPlan : 'starter') as 'starter' | 'pro' | 'business')
+          setStripeSubscriptionId((user.stripeSubscriptionId as string) ?? null)
+          setSubscriptionStatus((user.subscriptionStatus as string) ?? null)
+          setSubscriptionEnd(user.subscriptionEnd != null ? (typeof user.subscriptionEnd === 'string' ? user.subscriptionEnd : new Date((user.subscriptionEnd as Date).getTime()).toISOString()) : null)
+        })
+        .catch(() => {})
     }
   }, [searchParams])
 
@@ -374,9 +389,24 @@ export default function ParametresPage() {
 
       {/* Formule actuelle */}
       <div className="border border-[var(--border)] rounded-xl p-6 mb-6 bg-[var(--background)]">
-        <h2 className="text-sm font-medium text-[var(--foreground)] mb-2 flex items-center gap-2">
-          <Sparkles className="w-4 h-4" />
-          Formule actuelle : {planLabel(subscriptionPlan)}
+        <h2 className="text-sm font-medium text-[var(--foreground)] mb-2 flex items-center gap-2 flex-wrap">
+          <span className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Formule actuelle : {planLabel(subscriptionPlan)}
+          </span>
+          {(subscriptionPlan === 'pro' || subscriptionPlan === 'business') && subscriptionStatus === 'cancelled' && subscriptionEnd && (() => {
+            const end = new Date(subscriptionEnd)
+            const now = new Date()
+            now.setHours(0, 0, 0, 0)
+            end.setHours(0, 0, 0, 0)
+            const daysLeft = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)))
+            const dateStr = end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            return (
+              <span className="text-[var(--muted)] font-normal text-xs sm:text-sm">
+                — Se terminant dans {daysLeft} jour{daysLeft !== 1 ? 's' : ''} (le {dateStr})
+              </span>
+            )
+          })()}
         </h2>
         {subscriptionPlan === 'starter' && (
           <>

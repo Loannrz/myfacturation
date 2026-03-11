@@ -33,7 +33,9 @@ export default function FormulesPage() {
   const { data: session, status } = useSession()
   const [yearly, setYearly] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
+  const [cancelLoading, setCancelLoading] = useState(false)
   const currentPlan = (session?.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
+  const isPaidPlan = currentPlan === 'pro' || currentPlan === 'business'
 
   const handleChoosePlan = async (plan: 'pro' | 'business') => {
     setLoading(plan)
@@ -149,12 +151,40 @@ export default function FormulesPage() {
             </div>
             <p className="text-sm text-[var(--muted)] mt-2">Pour les activités occasionnelles</p>
           </div>
-          <Link
-            href="/dashboard"
-            className="mt-auto inline-flex justify-center items-center px-4 py-3 rounded-xl border-2 border-[var(--border)] font-medium text-[var(--foreground)] hover:bg-[var(--border)]/20 transition-colors"
-          >
-            Commencer gratuitement
-          </Link>
+          {isPaidPlan ? (
+            <button
+              type="button"
+              onClick={async () => {
+                const planLabel = currentPlan === 'business' ? 'Business' : 'Pro'
+                if (!confirm(`Résilier votre abonnement ${planLabel} ? Vous repasserez sur la formule Starter (à la fin de la période déjà payée ou immédiatement en cas d’essai gratuit).`)) return
+                setCancelLoading(true)
+                try {
+                  const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' })
+                  const data = await res.json().catch(() => ({}))
+                  if (data.ok) {
+                    window.location.href = '/parametres?resilie=1'
+                    return
+                  }
+                  alert(data.error || 'Impossible de résilier.')
+                } catch {
+                  alert('Erreur lors de la résiliation.')
+                } finally {
+                  setCancelLoading(false)
+                }
+              }}
+              disabled={cancelLoading}
+              className="mt-auto inline-flex justify-center items-center px-4 py-3 rounded-xl border-2 border-[var(--border)] font-medium text-[var(--foreground)] hover:bg-[var(--border)]/20 transition-colors disabled:opacity-50"
+            >
+              {cancelLoading ? 'Résiliation…' : 'Commencer gratuitement'}
+            </button>
+          ) : (
+            <Link
+              href="/dashboard"
+              className="mt-auto inline-flex justify-center items-center px-4 py-3 rounded-xl border-2 border-[var(--border)] font-medium text-[var(--foreground)] hover:bg-[var(--border)]/20 transition-colors"
+            >
+              Commencer gratuitement
+            </Link>
+          )}
         </div>
 
         {/* Pro */}
