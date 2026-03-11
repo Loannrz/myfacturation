@@ -19,9 +19,9 @@ function getTransporter() {
   const host = process.env.SMTP_HOST
   const port = parseInt(process.env.SMTP_PORT || '587', 10)
   const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
-  const from = process.env.SMTP_FROM
-  if (!host || !user || !pass || !from?.trim()) return null
+  const pass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD
+  const from = process.env.SMTP_FROM?.trim() || process.env.SMTP_USER?.trim()
+  if (!host || !user || !pass || !from) return null
   return nodemailer.createTransport({
     host,
     port,
@@ -44,14 +44,14 @@ export async function sendMail(options: {
     return {
       ok: false,
       status: 'skipped_config_missing',
-      error: 'SMTP non configuré (SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM)',
+      error: 'SMTP non configuré : définissez SMTP_HOST, SMTP_USER, SMTP_PASS ou SMTP_PASSWORD (SMTP_FROM optionnel, défaut = SMTP_USER)',
     }
   }
   const toList = Array.isArray(options.to) ? options.to : [options.to]
-  const from = options.from || process.env.SMTP_FROM!
+  const fromAddr = options.from || process.env.SMTP_FROM?.trim() || process.env.SMTP_USER!
   try {
     const info = await transporter.sendMail({
-      from,
+      from: fromAddr,
       to: toList.join(', '),
       cc: options.cc,
       subject: options.subject,
