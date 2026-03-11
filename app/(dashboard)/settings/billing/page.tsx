@@ -62,12 +62,13 @@ export default function SettingsBillingPage() {
   }
 
   const handleCancelSubscription = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir résilier votre abonnement ? Vous repasserez sur la formule Starter (à la fin de la période payée si abonnement Stripe, ou immédiatement sinon).')) return
+    if (!confirm('Résilier l’abonnement ? Vous repasserez sur Starter (fin de période si abonnement Stripe, sinon immédiat). Si vous n’avez pas d’abonnement, aucun changement.')) return
     setCancelling(true)
     try {
       const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' })
       const data = await res.json()
       if (data.ok) {
+        if (data.message) alert(data.message)
         window.location.href = '/parametres?resilie=1'
         return
       }
@@ -155,17 +156,15 @@ export default function SettingsBillingPage() {
               {portalLoading ? 'Ouverture…' : 'Gérer mon abonnement (Stripe)'}
             </button>
           )}
-          {isPaidPlan && (
-            <button
-              type="button"
-              onClick={handleCancelSubscription}
-              disabled={!!cancelling}
-              className="inline-flex items-center gap-2 justify-center px-4 py-2.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--border)]/20 font-medium text-sm disabled:opacity-50"
-            >
-              <XCircle className="w-4 h-4" />
-              {cancelling ? 'Annulation…' : 'Résilier l’abonnement'}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleCancelSubscription}
+            disabled={!!cancelling}
+            className="inline-flex items-center gap-2 justify-center px-4 py-2.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--border)]/20 font-medium text-sm disabled:opacity-50"
+          >
+            <XCircle className="w-4 h-4" />
+            {cancelling ? 'Annulation…' : 'Résilier l’abonnement'}
+          </button>
         </div>
         <p className="text-xs text-[var(--muted)] mt-3">
           Sur le portail Stripe vous pouvez résilier, changer de moyen de paiement ou consulter vos factures.

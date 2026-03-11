@@ -1,15 +1,14 @@
-// Utiliser la base cloud si DATABASE_URL pointe vers localhost et qu'on a une URL cloud (ex. Vercel)
-if (typeof process !== 'undefined') {
-  const url = process.env.DATABASE_URL || ''
+// Accepter toute variable d’env Postgres (Vercel : DATABASE_URL ou noms personnalisés)
+if (typeof process !== 'undefined' && !process.env.DATABASE_URL?.startsWith('postgres')) {
   const cloud =
-    process.env.MYFACTURATION_PRISMA_DATABASE_URL ||
-    process.env.MYFACTURATION_POSTGRES_URL ||
-    process.env.MYFACTURATION_DATABASE_URL
-  if (cloud && (url.includes('localhost') || !url)) {
-    process.env.DATABASE_URL = cloud
-  } else if (!process.env.DATABASE_URL && cloud) {
-    process.env.DATABASE_URL = cloud
-  }
+    process.env.MYFACTURATION_PRISMA_DATABASE_URL?.startsWith('postgres') ? process.env.MYFACTURATION_PRISMA_DATABASE_URL :
+    process.env.MYFACTURATION_POSTGRES_URL?.startsWith('postgres') ? process.env.MYFACTURATION_POSTGRES_URL :
+    process.env.MYFACTURATION_DATABASE_URL?.startsWith('postgres') ? process.env.MYFACTURATION_DATABASE_URL :
+    process.env.POSTGRES_URL?.startsWith('postgres') ? process.env.POSTGRES_URL :
+    process.env.URL_DE_LA_BASE_DE_DONNEES_MYFACTURATION_PRISMA?.startsWith('postgres') ? process.env.URL_DE_LA_BASE_DE_DONNEES_MYFACTURATION_PRISMA :
+    process.env.URL_POSTGRES_DE_MON_FACTURATION?.startsWith('postgres') ? process.env.URL_POSTGRES_DE_MON_FACTURATION :
+    null
+  if (cloud) process.env.DATABASE_URL = cloud
 }
 
 import { PrismaClient } from '@prisma/client'

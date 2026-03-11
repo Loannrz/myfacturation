@@ -427,48 +427,49 @@ export default function ParametresPage() {
         {subscriptionPlan === 'business' && (
           <p className="text-sm text-[var(--muted)]">Toutes les fonctionnalités sont débloquées.</p>
         )}
-        {(subscriptionPlan === 'pro' || subscriptionPlan === 'business') && (
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={async () => {
-                const isTrialing = subscriptionStatus === 'trialing'
-                const hasStripe = !!stripeSubscriptionId
-                const msg = !hasStripe || isTrialing
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={async () => {
+              const isTrialing = subscriptionStatus === 'trialing'
+              const hasStripe = !!stripeSubscriptionId
+              const isPaid = subscriptionPlan === 'pro' || subscriptionPlan === 'business'
+              const msg = !isPaid
+                ? 'Confirmer : vous n’avez pas d’abonnement actif. Vous restez en Starter (aucun prélèvement).'
+                : !hasStripe || isTrialing
                   ? 'Résilier votre abonnement ? Vous repasserez sur la formule Starter immédiatement.'
                   : 'Résilier votre abonnement ? Vous repasserez sur la formule Starter à la fin de la période déjà payée.'
-                if (!confirm(msg)) return
-                setCancelSubscriptionLoading(true)
-                try {
-                  const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' })
-                  const data = await res.json()
-                  if (data.ok) {
-                    setMessage('Abonnement résilié. Vous gardez l’accès jusqu’à la fin de la période payée.')
-                    const meRes = await fetch('/api/me')
-                    const meData = await meRes.json().catch(() => ({}))
-                    const planVal = (meData.subscriptionPlan === 'pro' || meData.subscriptionPlan === 'business' ? meData.subscriptionPlan : 'starter') as 'starter' | 'pro' | 'business'
-                    setSubscriptionPlan(planVal)
-                    setStripeSubscriptionId(meData.stripeSubscriptionId ?? null)
-                    setSubscriptionStatus(meData.subscriptionStatus ?? null)
-                    setSubscriptionEnd(meData.subscriptionEnd != null ? (typeof meData.subscriptionEnd === 'string' ? meData.subscriptionEnd : new Date(meData.subscriptionEnd).toISOString()) : null)
-                    if (planVal === 'starter') lastSyncedPlanRef.current = 'starter'
-                    updateSession?.({ subscriptionPlan: planVal }).catch(() => {})
-                  } else {
-                    setMessage(data.error || 'Erreur')
-                  }
-                } catch {
-                  setMessage('Erreur lors de la résiliation.')
-                } finally {
-                  setCancelSubscriptionLoading(false)
+              if (!confirm(msg)) return
+              setCancelSubscriptionLoading(true)
+              try {
+                const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' })
+                const data = await res.json()
+                if (data.ok) {
+                  setMessage(data.message || 'Abonnement résilié.')
+                  const meRes = await fetch('/api/me')
+                  const meData = await meRes.json().catch(() => ({}))
+                  const planVal = (meData.subscriptionPlan === 'pro' || meData.subscriptionPlan === 'business' ? meData.subscriptionPlan : 'starter') as 'starter' | 'pro' | 'business'
+                  setSubscriptionPlan(planVal)
+                  setStripeSubscriptionId(meData.stripeSubscriptionId ?? null)
+                  setSubscriptionStatus(meData.subscriptionStatus ?? null)
+                  setSubscriptionEnd(meData.subscriptionEnd != null ? (typeof meData.subscriptionEnd === 'string' ? meData.subscriptionEnd : new Date(meData.subscriptionEnd).toISOString()) : null)
+                  if (planVal === 'starter') lastSyncedPlanRef.current = 'starter'
+                  updateSession?.({ subscriptionPlan: planVal }).catch(() => {})
+                } else {
+                  setMessage(data.error || 'Erreur')
                 }
-              }}
-              disabled={cancelSubscriptionLoading}
-              className="inline-flex px-4 py-2 rounded-lg border border-red-500/50 text-red-600 dark:text-red-400 font-medium text-sm hover:bg-red-500/10 disabled:opacity-50"
-            >
-              {cancelSubscriptionLoading ? 'Résiliation…' : 'Résilier l’abonnement'}
-            </button>
-          </div>
-        )}
+              } catch {
+                setMessage('Erreur lors de la résiliation.')
+              } finally {
+                setCancelSubscriptionLoading(false)
+              }
+            }}
+            disabled={cancelSubscriptionLoading}
+            className="inline-flex px-4 py-2 rounded-lg border border-red-500/50 text-red-600 dark:text-red-400 font-medium text-sm hover:bg-red-500/10 disabled:opacity-50"
+          >
+            {cancelSubscriptionLoading ? 'Résiliation…' : 'Résilier l’abonnement'}
+          </button>
+        </div>
         <p className="text-sm text-[var(--muted)] mt-4">
           <Link href="/settings/billing" className="text-violet-600 dark:text-violet-400 hover:underline">
             Facturation & abonnement

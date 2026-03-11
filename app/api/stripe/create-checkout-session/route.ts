@@ -44,10 +44,13 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 })
     const hasUsedTrial = (user as { hasUsedTrial?: boolean }).hasUsedTrial ?? false
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
-    if (!baseUrl) {
-      return NextResponse.json({ error: 'NEXT_PUBLIC_APP_URL ou NEXTAUTH_URL requis' }, { status: 500 })
-    }
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXTAUTH_URL ||
+      process.env.URL_AUTH_SUIVANTE ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, '').split('/')[0]}` : null) ||
+      'http://localhost:3000'
+    const baseUrlClean = baseUrl.replace(/\/$/, '')
 
     let customerId = (user as { stripeCustomerId?: string }).stripeCustomerId ?? null
     if (!customerId && user.email) {
@@ -68,8 +71,8 @@ export async function POST(req: NextRequest) {
       customer: customerId || undefined,
       customer_email: !customerId ? (user.email ?? undefined) : undefined,
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${baseUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/billing/cancel`,
+      success_url: `${baseUrlClean}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrlClean}/billing/cancel`,
       metadata: { userId: session.id, planKey },
       subscription_data: {
         metadata: { userId: session.id, planKey },

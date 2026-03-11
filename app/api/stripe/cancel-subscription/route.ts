@@ -51,5 +51,5 @@ export async function POST() {
     return NextResponse.json({ ok: true, message: 'Abonnement résilié. Vous êtes repassé sur la formule Starter.' })
   }
 
-  return NextResponse.json({ error: 'Aucun abonnement actif' }, { status: 400 })
+  return NextResponse.json({ ok: true, message: 'Vous n’avez pas d’abonnement actif. Vous êtes bien en formule Starter, aucun prélèvement.' })
 }
