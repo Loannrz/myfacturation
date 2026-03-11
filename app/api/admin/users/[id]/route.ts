@@ -113,12 +113,25 @@ export async function DELETE(
 
   const email = user.email?.trim().toLowerCase()
   if (email) {
-    await prisma.deletedEmail.upsert({
-      where: { email },
-      create: { email },
-      update: { deletedAt: new Date() },
-    })
+    try {
+      await prisma.deletedEmail.upsert({
+        where: { email },
+        create: { email },
+        update: { deletedAt: new Date() },
+      })
+    } catch {
+      // Table DeletedEmail absente (migration non appliquée) ou autre erreur : on continue la suppression
+    }
   }
-  await prisma.user.delete({ where: { id } })
-  return NextResponse.json({ ok: true })
+
+  try {
+    await prisma.user.delete({ where: { id } })
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[admin DELETE user]', id, err)
+    return NextResponse.json(
+      { error: 'Impossible de supprimer le compte. Les données liées ont peut-être bloqué la suppression.' },
+      { status: 500 }
+    )
+  }
 }
