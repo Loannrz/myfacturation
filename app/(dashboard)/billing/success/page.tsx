@@ -10,12 +10,21 @@ export default function BillingSuccessPage() {
   const searchParams = useSearchParams()
   const { status, update: updateSession } = useSession()
   const [refreshed, setRefreshed] = useState(false)
+  const [syncFailed, setSyncFailed] = useState(false)
   const sessionId = searchParams.get('session_id')
 
   useEffect(() => {
     if (status !== 'authenticated' || !sessionId || refreshed) return
-    const doSync = () =>
-      fetch(`/api/stripe/sync-after-checkout?session_id=${encodeURIComponent(sessionId)}`).then((r) => r.ok)
+    const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+    const doSync = (): Promise<boolean> =>
+      fetch(`/api/stripe/sync-after-checkout?session_id=${encodeURIComponent(sessionId)}`)
+        .then(async (r) => {
+          if (r.ok) return true
+          await r.json().catch(() => ({}))
+          if (r.status === 404 || r.status === 409) return false
+          setSyncFailed(true)
+          return false
+        })
     const refreshFromMe = () =>
       fetch('/api/me')
         .then((r) => r.json())
@@ -24,10 +33,16 @@ export default function BillingSuccessPage() {
           const planVal = plan === 'pro' || plan === 'business' ? plan : 'starter'
           return updateSession?.({ subscriptionPlan: planVal, billingCycle: user.billingCycle ?? null })
         })
-    doSync()
+    const trySync = (attempt: number): Promise<boolean> =>
+      doSync().then((ok) => {
+        if (ok) return true
+        if (attempt >= 4) return false
+        return delay(3000).then(() => trySync(attempt + 1))
+      })
+    delay(1500)
+      .then(() => trySync(0))
       .then((ok) => {
-        if (!ok) return new Promise((r) => setTimeout(r, 1500)).then(doSync)
-        return ok
+        if (!ok) setSyncFailed(true)
       })
       .then(() => refreshFromMe())
       .then(() => setRefreshed(true))
@@ -43,6 +58,11 @@ export default function BillingSuccessPage() {
       <p className="text-[var(--muted)] mb-8">
         Merci pour votre confiance. Les fonctionnalités de votre formule sont désormais disponibles.
       </p>
+      {syncFailed && (
+        <p className="text-sm text-amber-600 dark:text-amber-400 mb-4">
+          Si la formule ne s’affiche pas, déconnectez-vous puis reconnectez-vous pour actualiser.
+        </p>
+      )}
       <p className="text-xs text-[var(--muted)] mb-6">
         Si votre formule ne s’affiche pas à jour dans le menu, rechargez la page ou déconnectez-vous puis reconnectez-vous.
       </p>

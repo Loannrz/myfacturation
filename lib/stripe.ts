@@ -43,3 +43,14 @@ export function planFromPriceId(priceId: string): { plan: 'pro' | 'business'; cy
   if (priceId === businessYearly) return { plan: 'business', cycle: 'yearly' }
   return null
 }
+
+/** planKey (ex: business_monthly) → plan + cycle. Fallback quand planFromPriceId échoue (env différents). */
+export function mappingFromPlanKey(planKey: string | undefined): { plan: 'pro' | 'business'; cycle: 'monthly' | 'yearly' } | null {
+  if (!planKey || typeof planKey !== 'string') return null
+  const key = planKey.trim().toLowerCase()
+  if (key === 'pro_monthly') return { plan: 'pro', cycle: 'monthly' }
+  if (key === 'pro_yearly') return { plan: 'pro', cycle: 'yearly' }
+  if (key === 'business_monthly') return { plan: 'business', cycle: 'monthly' }
+  if (key === 'business_yearly') return { plan: 'business', cycle: 'yearly' }
+  return null
+}

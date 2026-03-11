@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { stripe, planFromPriceId } from '@/lib/stripe'
+import { stripe, planFromPriceId, mappingFromPlanKey } from '@/lib/stripe'
 import { planTypeFromSubscription } from '@/lib/subscription'
 
 export const dynamic = 'force-dynamic'
@@ -25,16 +25,31 @@ export async function GET(req: NextRequest) {
     const checkoutSession = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['subscription'],
     })
-    if (checkoutSession.metadata?.userId !== session.id) {
-      return NextResponse.json({ error: 'Session non autorisée' }, { status: 403 })
+    const metaUserId = checkoutSession.metadata?.userId != null ? String(checkoutSession.metadata.userId) : ''
+    if (metaUserId !== session.id) {
+      return NextResponse.json(
+        { error: 'Session non autorisée', code: 'SESSION_USER_MISMATCH' },
+        { status: 403 }
+      )
     }
-    const subId =
-      typeof checkoutSession.subscription === 'object' && checkoutSession.subscription?.id
-        ? checkoutSession.subscription.id
+    if (checkoutSession.status !== 'complete') {
+      return NextResponse.json(
+        { error: 'Checkout pas encore finalisé', code: 'NOT_COMPLETE' },
+        { status: 409 }
+      )
+    }
+    let subId: string | null =
+      typeof checkoutSession.subscription === 'object' && checkoutSession.subscription != null && 'id' in checkoutSession.subscription
+        ? (checkoutSession.subscription as { id: string }).id
         : typeof checkoutSession.subscription === 'string'
           ? checkoutSession.subscription
           : null
-    if (!subId) return NextResponse.json({ error: 'Abonnement introuvable' }, { status: 404 })
+    if (!subId) {
+      return NextResponse.json(
+        { error: 'Abonnement pas encore créé par Stripe', code: 'SUBSCRIPTION_PENDING' },
+        { status: 404 }
+      )
+    }
 
     const sub = await stripe.subscriptions.retrieve(subId, { expand: ['items.data.price'] })
     const subData = sub as unknown as {
@@ -45,7 +60,9 @@ export async function GET(req: NextRequest) {
       items: { data: Array<{ price?: { id?: string } }> }
     }
     const priceId = subData.items.data[0]?.price?.id ?? ''
-    const mapping = planFromPriceId(priceId)
+    const planKeyFromMeta = checkoutSession.metadata?.planKey as string | undefined
+    let mapping = planFromPriceId(priceId)
+    if (!mapping) mapping = mappingFromPlanKey(planKeyFromMeta)
     if (!mapping) return NextResponse.json({ error: 'Formule non reconnue' }, { status: 400 })
 
     const planType = planTypeFromSubscription(mapping.plan)
@@ -68,7 +85,7 @@ export async function GET(req: NextRequest) {
         subscriptionStart: new Date(subData.current_period_start * 1000),
         subscriptionEnd: new Date(subData.current_period_end * 1000),
         ...(hadTrial ? { hasUsedTrial: true } : {}),
-      },
+      } as Parameters<typeof prisma.user.update>[0]['data'],
     })
 
     return NextResponse.json({

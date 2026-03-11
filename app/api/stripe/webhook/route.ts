@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { headers } from 'next/headers'
-import { stripe, planFromPriceId } from '@/lib/stripe'
+import { stripe, planFromPriceId, mappingFromPlanKey } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { planTypeFromSubscription } from '@/lib/subscription'
 import Stripe from 'stripe'
@@ -83,7 +83,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     items: { data: Array<{ price?: { id?: string } }> }
   }
   const priceId = subData.items.data[0]?.price?.id ?? ''
-  const mapping = planFromPriceId(priceId)
+  const planKeyFromMeta = (sub as unknown as { metadata?: { planKey?: string } }).metadata?.planKey
+  let mapping = planFromPriceId(priceId)
+  if (!mapping) mapping = mappingFromPlanKey(planKeyFromMeta)
   if (!mapping) return
 
   const planType = planTypeFromSubscription(mapping.plan)
@@ -149,7 +151,9 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
           ? 'past_due'
           : 'cancelled'
   const priceId = subData.items.data[0]?.price?.id ?? ''
-  const mapping = planFromPriceId(priceId)
+  const planKeyFromMeta = (sub as unknown as { metadata?: { planKey?: string } }).metadata?.planKey
+  let mapping = planFromPriceId(priceId)
+  if (!mapping) mapping = mappingFromPlanKey(planKeyFromMeta)
 
   const data: {
     subscriptionStatus: string
