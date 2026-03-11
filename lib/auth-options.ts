@@ -110,7 +110,7 @@ const credentialsProvider = CredentialsProvider({
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as NextAuthOptions['adapter'],
-  session: { strategy: 'jwt', maxAge: 7 * 24 * 60 * 60 },
+  session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 }, // 30 jours — après il faut se reconnecter
   pages: {
     signIn: '/login',
     error: '/login',

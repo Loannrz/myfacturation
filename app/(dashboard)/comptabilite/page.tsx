@@ -179,7 +179,7 @@ function AnalyticsAmountTooltip({
   valueLabel = 'Montant',
 }: {
   active?: boolean
-  payload?: Array<{ payload?: { label: string; amount: number } }>
+  payload?: Array<{ payload?: { label: string; amount: number }; value?: number }>
   label?: string
   valueLabel?: string
 }) {
