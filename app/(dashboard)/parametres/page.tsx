@@ -397,12 +397,16 @@ export default function ParametresPage() {
         {subscriptionPlan === 'business' && (
           <p className="text-sm text-[var(--muted)]">Toutes les fonctionnalités sont débloquées.</p>
         )}
-        {(subscriptionPlan === 'pro' || subscriptionPlan === 'business') && stripeSubscriptionId && subscriptionStatus === 'active' && (
+        {(subscriptionPlan === 'pro' || subscriptionPlan === 'business') && stripeSubscriptionId && (subscriptionStatus === 'active' || subscriptionStatus === 'trialing') && (
           <div className="mt-4">
             <button
               type="button"
               onClick={async () => {
-                if (!confirm('Résilier votre abonnement ? Vous repasserez sur la formule Starter à la fin de la période déjà payée.')) return
+                const isTrialing = subscriptionStatus === 'trialing'
+                const msg = isTrialing
+                  ? 'Résilier votre essai gratuit ? Vous repasserez sur la formule Starter immédiatement.'
+                  : 'Résilier votre abonnement ? Vous repasserez sur la formule Starter à la fin de la période déjà payée.'
+                if (!confirm(msg)) return
                 setCancelSubscriptionLoading(true)
                 try {
                   const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' })
