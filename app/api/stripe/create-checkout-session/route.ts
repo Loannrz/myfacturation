@@ -39,9 +39,10 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.id },
-      select: { email: true, stripeCustomerId: true },
+      select: { email: true, stripeCustomerId: true, hasUsedTrial: true },
     })
     if (!user) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 })
+    const hasUsedTrial = (user as { hasUsedTrial?: boolean }).hasUsedTrial ?? false
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
     if (!baseUrl) {
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
       metadata: { userId: session.id, planKey },
       subscription_data: {
         metadata: { userId: session.id, planKey },
-        trial_period_days: 7,
+        ...(hasUsedTrial ? {} : { trial_period_days: 7 }),
       },
     })
 

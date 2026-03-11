@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
     "db:push": "node scripts/with-db-env.cjs db push",
     "db:migrate": "node scripts/with-db-env.cjs migrate dev",
     "db:migrate:deploy": "node scripts/with-db-env.cjs migrate deploy",

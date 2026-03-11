@@ -23,6 +23,7 @@ export async function GET() {
       subscriptionStatus: true,
       subscriptionEnd: true,
       stripeSubscriptionId: true,
+      hasUsedTrial: true,
       emailVerified: true,
     },
   })

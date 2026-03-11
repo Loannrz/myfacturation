@@ -14,15 +14,24 @@ export default function BillingSuccessPage() {
 
   useEffect(() => {
     if (status !== 'authenticated' || !sessionId || refreshed) return
-    fetch('/api/me')
-      .then((r) => r.json())
-      .then((user) => {
-        const plan = user.subscriptionPlan ?? 'starter'
-        const planVal = plan === 'pro' || plan === 'business' ? plan : 'starter'
-        return updateSession?.({ subscriptionPlan: planVal, billingCycle: user.billingCycle ?? null })
+    const doSync = () =>
+      fetch(`/api/stripe/sync-after-checkout?session_id=${encodeURIComponent(sessionId)}`).then((r) => r.ok)
+    const refreshFromMe = () =>
+      fetch('/api/me')
+        .then((r) => r.json())
+        .then((user) => {
+          const plan = user.subscriptionPlan ?? 'starter'
+          const planVal = plan === 'pro' || plan === 'business' ? plan : 'starter'
+          return updateSession?.({ subscriptionPlan: planVal, billingCycle: user.billingCycle ?? null })
+        })
+    doSync()
+      .then((ok) => {
+        if (!ok) return new Promise((r) => setTimeout(r, 1500)).then(doSync)
+        return ok
       })
+      .then(() => refreshFromMe())
       .then(() => setRefreshed(true))
-      .catch(() => setRefreshed(true))
+      .catch(() => refreshFromMe().then(() => setRefreshed(true)))
   }, [status, sessionId, refreshed, updateSession])
 
   return (

@@ -67,6 +67,7 @@ model User {
   subscriptionEnd     DateTime?
   stripeCustomerId    String?   // Stripe customer id (cus_xxx)
   stripeSubscriptionId String?  // Stripe subscription id (sub_xxx)
+  hasUsedTrial         Boolean  @default(false)   // true si l'utilisateur a déjà utilisé un essai gratuit (un seul par compte)
   role                String    @default("user")   // user | admin
   suspended           Boolean   @default(false)
   createdAt            DateTime  @default(now())

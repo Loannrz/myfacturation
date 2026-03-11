@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Check, X, Zap, Crown, Sparkles } from 'lucide-react'
 import { useSession } from 'next-auth/react'
@@ -36,6 +36,14 @@ export default function FormulesPage() {
   const [cancelLoading, setCancelLoading] = useState(false)
   const currentPlan = (session?.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
   const isPaidPlan = currentPlan === 'pro' || currentPlan === 'business'
+  const [hasUsedTrial, setHasUsedTrial] = useState(false)
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((u) => setHasUsedTrial(!!u.hasUsedTrial))
+      .catch(() => {})
+  }, [status])
 
   const handleChoosePlan = async (plan: 'pro' | 'business') => {
     setLoading(plan)
@@ -194,7 +202,9 @@ export default function FormulesPage() {
           </div>
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-[var(--foreground)]">Pro</h3>
-            <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mt-1">7 jours d&apos;essai gratuit</p>
+            <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mt-1">
+              {hasUsedTrial ? 'Paiement dès maintenant (essai déjà utilisé)' : "7 jours d'essai gratuit"}
+            </p>
             <div className="mt-2">
               <span className="text-3xl font-bold text-[var(--foreground)]">
                 {yearly ? (PRICING.pro.yearly / 12).toFixed(2).replace('.', ',') : PRICING.pro.monthly} €
@@ -227,7 +237,9 @@ export default function FormulesPage() {
           </div>
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-[var(--foreground)]">Business</h3>
-            <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mt-1">7 jours d&apos;essai gratuit</p>
+            <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mt-1">
+              {hasUsedTrial ? 'Paiement dès maintenant (essai déjà utilisé)' : "7 jours d'essai gratuit"}
+            </p>
             <div className="mt-2">
               <span className="text-3xl font-bold text-[var(--foreground)]">
                 {yearly ? (PRICING.business.yearly / 12).toFixed(2).replace('.', ',') : PRICING.business.monthly} €

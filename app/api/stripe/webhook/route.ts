@@ -75,12 +75,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   if (!subscriptionId) return
 
   const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items.data.price'] })
-  const subData = sub as unknown as { current_period_start: number; current_period_end: number; items: { data: Array<{ price?: { id?: string } }> } }
+  const subData = sub as unknown as {
+    status: string
+    current_period_start: number
+    current_period_end: number
+    trial_end?: number
+    items: { data: Array<{ price?: { id?: string } }> }
+  }
   const priceId = subData.items.data[0]?.price?.id ?? ''
   const mapping = planFromPriceId(priceId)
   if (!mapping) return
 
   const planType = planTypeFromSubscription(mapping.plan)
+  const subscriptionStatus = subData.status === 'trialing' ? 'trialing' : 'active'
+  const hadTrial = subData.status === 'trialing' || (subData.trial_end != null && subData.trial_end > 0)
   const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null
   await prisma.user.update({
     where: { id: userId },
@@ -88,11 +96,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       subscriptionPlan: mapping.plan,
       billingCycle: mapping.cycle,
       planType,
-      subscriptionStatus: 'active',
+      subscriptionStatus,
       stripeCustomerId: customerId ?? undefined,
       stripeSubscriptionId: subscriptionId,
       subscriptionStart: new Date(subData.current_period_start * 1000),
       subscriptionEnd: new Date(subData.current_period_end * 1000),
+      ...(hadTrial ? { hasUsedTrial: true } : {}),
     },
   })
 }
@@ -131,7 +140,14 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
   if (!userId) return
 
   const subData = sub as unknown as { status: string; current_period_start: number; current_period_end: number; items: { data: Array<{ price?: { id?: string } }> } }
-  const status = subData.status === 'active' ? 'active' : subData.status === 'past_due' ? 'past_due' : 'cancelled'
+  const status =
+    subData.status === 'active'
+      ? 'active'
+      : subData.status === 'trialing'
+        ? 'trialing'
+        : subData.status === 'past_due'
+          ? 'past_due'
+          : 'cancelled'
   const priceId = subData.items.data[0]?.price?.id ?? ''
   const mapping = planFromPriceId(priceId)
 
@@ -142,16 +158,18 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
     subscriptionPlan?: string
     billingCycle?: string
     planType?: string
+    hasUsedTrial?: boolean
   } = {
     subscriptionStatus: status,
     subscriptionStart: new Date(subData.current_period_start * 1000),
     subscriptionEnd: new Date(subData.current_period_end * 1000),
   }
-  if (mapping && status === 'active') {
+  if (mapping && (status === 'active' || status === 'trialing')) {
     data.subscriptionPlan = mapping.plan
     data.billingCycle = mapping.cycle
     data.planType = planTypeFromSubscription(mapping.plan)
   }
+  if (status === 'trialing') data.hasUsedTrial = true
 
   await prisma.user.update({
     where: { id: userId },
