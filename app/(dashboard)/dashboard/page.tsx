@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { FileText, Receipt, FileMinus, AlertCircle, Info, Lock } from 'lucide-react'
+import { FileText, Receipt, FileMinus, AlertCircle, Info, Lock, AlertTriangle } from 'lucide-react'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
 import {
   AreaChart,
@@ -29,6 +29,15 @@ type SeriesPoint = {
   creditNoteAmount: number
 }
 
+type OverdueInvoiceItem = {
+  number: string
+  clientName: string
+  amount: number
+  currency: string
+  dueDate: string | null
+  overdueDays: number
+}
+
 type Stats = {
   year: number
   month: number | null
@@ -45,6 +54,7 @@ type Stats = {
   paymentDelayAmount: number
   paymentDelayCount: number
   series: SeriesPoint[]
+  overdueInvoices?: OverdueInvoiceItem[]
   databaseError?: boolean
 }
 
@@ -149,6 +159,7 @@ export default function DashboardPage() {
             paymentDelayAmount: data.paymentDelayAmount ?? 0,
             paymentDelayCount: data.paymentDelayCount ?? 0,
             series: data.series ?? [],
+            overdueInvoices: data.overdueInvoices ?? [],
             databaseError: data.databaseError ?? false,
           })
         } else {
@@ -344,6 +355,32 @@ export default function DashboardPage() {
                 {stats.paymentDelayCount} facture{stats.paymentDelayCount !== 1 ? 's' : ''} en retard
               </p>
             </div>
+
+            {/* Factures en retard — liste des 5 dernières */}
+            {stats.overdueInvoices && stats.overdueInvoices.length > 0 ? (
+              <div className="lg:col-span-2 p-5 rounded-xl border border-red-500/30 bg-red-500/5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-[var(--foreground)] flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-500" />
+                    Factures en retard
+                  </span>
+                  <Link href="/factures?filter=overdue" className="text-xs font-medium text-red-600 dark:text-red-400 hover:underline">
+                    Voir tout
+                  </Link>
+                </div>
+                <ul className="space-y-2">
+                  {stats.overdueInvoices.map((inv) => (
+                    <li key={inv.number} className="text-sm flex flex-wrap items-baseline gap-2">
+                      <span className="text-red-600 dark:text-red-400 font-medium">Facture {inv.number}</span>
+                      <span className="text-[var(--muted)]">est impayée depuis {inv.overdueDays} jour{inv.overdueDays !== 1 ? 's' : ''}</span>
+                      <span className="text-[var(--muted)]">— {inv.clientName}</span>
+                      <span className="font-medium">{inv.amount.toFixed(2)} {inv.currency}</span>
+                      <span className="text-[var(--muted)]">échéance {inv.dueDate ?? '—'}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             {/* CA - grande carte avec courbe */}
             <div className="lg:col-span-2 p-5 rounded-xl border border-[var(--border)] bg-[var(--background)]">

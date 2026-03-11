@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
       ? { issueDate: { gte: from.slice(0, 10), lte: to.slice(0, 10) } }
       : { issueDate: { startsWith: String(year) } }
 
+  const today = new Date().toISOString().slice(0, 10)
   let databaseError = false
   let allInvoices: { issueDate: string; status: string; totalTTC: number; paidAt: Date | null }[] = []
   let invoicesPeriod: { issueDate: string; status: string; totalTTC: number; paidAt: Date | null }[] = []
@@ -77,6 +78,7 @@ export async function GET(req: NextRequest) {
   let lateInvoices: { totalTTC: number; dueDate: string | null }[] = []
   let allCreditNotes: { issueDate: string; totalTTC: number }[] = []
   let creditNotesPeriod: { totalTTC: number }[] = []
+  let overdueInvoices: { number: string; totalTTC: number; currency: string; dueDate: string | null; client: { firstName: string; lastName: string; companyName: string | null } | null; company: { name: string } | null }[] = []
 
   try {
     const result = await Promise.all([
@@ -126,6 +128,16 @@ export async function GET(req: NextRequest) {
       where: { ...whereBank, ...periodWhere },
       select: { totalTTC: true },
     }),
+    prisma.invoice.findMany({
+      where: {
+        ...whereUserId,
+        status: { not: 'paid' },
+        dueDate: { lt: today },
+      },
+      select: { number: true, totalTTC: true, currency: true, dueDate: true, client: { select: { firstName: true, lastName: true, companyName: true } }, company: { select: { name: true } } },
+      orderBy: { dueDate: 'asc' },
+      take: 5,
+    }),
   ])
     allInvoices = result[0]
     invoicesPeriod = result[1]
@@ -133,12 +145,12 @@ export async function GET(req: NextRequest) {
     lateInvoices = result[3]
     allCreditNotes = result[4]
     creditNotesPeriod = result[5]
+    overdueInvoices = result[6]
   } catch (e) {
     databaseError = true
     console.error('[api/stats] Database error:', e instanceof Error ? e.message : e)
   }
 
-  const today = new Date().toISOString().slice(0, 10)
   const paymentDelayAmount = lateInvoices
     .filter((i) => i.dueDate && i.dueDate < today)
     .reduce((s, i) => s + i.totalTTC, 0)
@@ -195,6 +207,13 @@ export async function GET(req: NextRequest) {
   const totalQuotes = quotes.length
   const signedQuotes = quotes.filter((q) => q.status === 'signed').length
 
+  const overdueWithDays = overdueInvoices.map((inv) => {
+    const due = inv.dueDate ?? ''
+    const days = due && due < today ? Math.floor((new Date(today).getTime() - new Date(due).getTime()) / (24 * 60 * 60 * 1000)) : 0
+    const clientName = inv.company?.name ?? (inv.client ? [inv.client.firstName, inv.client.lastName].filter(Boolean).join(' ') || inv.client.companyName || '—' : '—')
+    return { number: inv.number, clientName, amount: inv.totalTTC, currency: inv.currency, dueDate: inv.dueDate, overdueDays: days }
+  })
+
   return NextResponse.json({
     year,
     month: month ?? null,
@@ -211,6 +230,7 @@ export async function GET(req: NextRequest) {
     paymentDelayAmount,
     paymentDelayCount,
     series,
+    overdueInvoices: overdueWithDays,
     databaseError,
   })
 }

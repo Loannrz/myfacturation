@@ -171,6 +171,89 @@ function RevenueVsExpensesTooltip({
   )
 }
 
+/** Tooltip Analyses avancées — montant (factures payées, avoirs) */
+function AnalyticsAmountTooltip({
+  active,
+  payload,
+  label,
+  valueLabel = 'Montant',
+}: {
+  active?: boolean
+  payload?: Array<{ payload?: { label: string; amount: number } }>
+  label?: string
+  valueLabel?: string
+}) {
+  if (!active || !payload?.length || !label) return null
+  const point = payload[0]?.payload
+  const value = point?.amount ?? payload[0]?.value
+  const num = typeof value === 'number' ? value : 0
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-lg px-4 py-3 text-sm min-w-[200px]">
+      <p className="font-medium text-[var(--foreground)] border-b border-[var(--border)]/50 pb-1.5 mb-2">{label}</p>
+      <p className="text-[var(--muted)]">
+        {valueLabel} : <span className="font-semibold text-[var(--foreground)]">{formatEuro(num)}</span>
+      </p>
+    </div>
+  )
+}
+
+/** Tooltip Analyses avancées — nombre (devis) */
+function AnalyticsCountTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ payload?: { count: number }; value?: number }>
+  label?: string
+}) {
+  if (!active || !payload?.length || !label) return null
+  const point = payload[0]?.payload
+  const value = point?.count ?? payload[0]?.value
+  const num = typeof value === 'number' ? value : 0
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-lg px-4 py-3 text-sm min-w-[200px]">
+      <p className="font-medium text-[var(--foreground)] border-b border-[var(--border)]/50 pb-1.5 mb-2">{label}</p>
+      <p className="text-[var(--muted)]">
+        Nombre : <span className="font-semibold text-[var(--foreground)]">{num}</span>
+      </p>
+    </div>
+  )
+}
+
+/** Tooltip CA client — détail Revenus (factures payées), Avoirs, Total net */
+type RevenueDetailPoint = { month: string; label: string; paidAmount: number; creditNotesAmount: number; total: number }
+function AnalyticsRevenueTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ payload?: RevenueDetailPoint }>
+  label?: string
+}) {
+  if (!active || !payload?.length || !label) return null
+  const point = payload[0]?.payload as RevenueDetailPoint | undefined
+  if (!point) return null
+  const { paidAmount, creditNotesAmount, total } = point
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-lg px-4 py-3 text-sm min-w-[220px]">
+      <p className="font-medium text-[var(--foreground)] border-b border-[var(--border)]/50 pb-1.5 mb-2">{label}</p>
+      <div className="space-y-1">
+        <p className="text-[var(--muted)]">
+          Revenus (factures payées) : <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatEuro(paidAmount)}</span>
+        </p>
+        <p className="text-[var(--muted)]">
+          Avoirs (remboursés) : <span className="font-semibold text-rose-600 dark:text-rose-400">{formatEuro(creditNotesAmount)}</span>
+        </p>
+        <p className="text-[var(--muted)] pt-1 border-t border-[var(--border)]/50 mt-1.5">
+          Total CA (net) : <span className={`font-semibold ${total >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatEuro(total)}</span>
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function ComptabilitePage() {
   const { data: session } = useSession()
   const plan = (session?.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
@@ -217,6 +300,20 @@ export default function ComptabilitePage() {
   })
   const [savingExpense, setSavingExpense] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const [analyticsEntityType, setAnalyticsEntityType] = useState<'client' | 'company' | ''>('')
+  const [analyticsEntityId, setAnalyticsEntityId] = useState('')
+  const [analyticsYear, setAnalyticsYear] = useState(currentYear)
+  const [analyticsData, setAnalyticsData] = useState<{
+    paidInvoicesByMonth: { month: string; label: string; amount: number }[]
+    quotesSentByMonth: { month: string; label: string; count: number }[]
+    quotesSignedByMonth: { month: string; label: string; count: number }[]
+    creditNotesRefundedByMonth: { month: string; label: string; amount: number }[]
+    revenueByMonth: { month: string; label: string; amount: number }[]
+  } | null>(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [globalCounters, setGlobalCounters] = useState<{ month: string; label: string; clients: number; companies: number; products: number }[]>([])
+  const [globalCountersYear, setGlobalCountersYear] = useState(currentYear)
 
   const { periodFrom, periodTo } = useMemo(() => {
     if (periodMonth === '') {
@@ -338,6 +435,32 @@ export default function ComptabilitePage() {
       .then((r) => (r.ok ? r.json() : []))
       .then(setTransactions)
   }, [periodFrom, periodTo, filterType, filterStatus, filterClientId, filterBankAccountId])
+
+  useEffect(() => {
+    fetch(`/api/analytics/global-counters?year=${globalCountersYear}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setGlobalCounters)
+      .catch(() => setGlobalCounters([]))
+  }, [globalCountersYear])
+
+  useEffect(() => {
+    if (!analyticsEntityType || !analyticsEntityId) {
+      setAnalyticsData(null)
+      return
+    }
+    setAnalyticsLoading(true)
+    const base = analyticsEntityType === 'client' ? '/api/analytics/client' : '/api/analytics/company'
+    fetch(`${base}/${analyticsEntityId}?year=${analyticsYear}`)
+      .then((r) => {
+        if (!r.ok) return null
+        return r.json()
+      })
+      .then((data) => {
+        setAnalyticsData(data)
+      })
+      .catch(() => setAnalyticsData(null))
+      .finally(() => setAnalyticsLoading(false))
+  }, [analyticsEntityType, analyticsEntityId, analyticsYear])
 
   const handleExport = (format: 'csv' | 'excel' | 'report') => {
     const params = new URLSearchParams()
@@ -697,7 +820,245 @@ export default function ComptabilitePage() {
         </div>
       </section>
 
-      {/* ——— 5. Export ——— */}
+      {/* ——— 5. Advanced Analytics ——— */}
+      <section>
+        <h2 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider mb-4">Analyses avancées</h2>
+
+        <div className="space-y-8">
+          {/* Global counters: clients, companies, products (cumulative by month) */}
+          <div className="p-6 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-medium text-[var(--foreground)]">Évolution des effectifs</h3>
+              <select
+                value={globalCountersYear}
+                onChange={(e) => setGlobalCountersYear(parseInt(e.target.value, 10))}
+                className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm"
+              >
+                {[currentYear, currentYear - 1, currentYear - 2].map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <div className="h-[260px]">
+              {globalCounters.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <AreaChart data={globalCounters} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                    <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                    <Tooltip
+                      content={({ active, payload, label }) =>
+                        active && payload?.length ? (
+                          <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-lg px-4 py-3 text-sm">
+                            <p className="font-medium border-b border-[var(--border)]/50 pb-1.5 mb-2">{label}</p>
+                            <p className="text-[var(--muted)]">Clients : <span className="font-medium text-[var(--foreground)]">{payload.find((p) => p.dataKey === 'clients')?.value ?? 0}</span></p>
+                            <p className="text-[var(--muted)]">Sociétés : <span className="font-medium text-[var(--foreground)]">{payload.find((p) => p.dataKey === 'companies')?.value ?? 0}</span></p>
+                            <p className="text-[var(--muted)]">Produits : <span className="font-medium text-[var(--foreground)]">{payload.find((p) => p.dataKey === 'products')?.value ?? 0}</span></p>
+                          </div>
+                        ) : null
+                      }
+                    />
+                    <Legend />
+                    <Area type="monotone" dataKey="clients" name="Clients" stroke="rgb(59 130 246)" fill="rgb(59 130 246)" fillOpacity={0.3} />
+                    <Area type="monotone" dataKey="companies" name="Sociétés" stroke="rgb(16 185 129)" fill="rgb(16 185 129)" fillOpacity={0.3} />
+                    <Area type="monotone" dataKey="products" name="Produits" stroke="rgb(147 51 234)" fill="rgb(147 51 234)" fillOpacity={0.3} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-[var(--muted)] text-sm">Chargement…</div>
+              )}
+            </div>
+            <p className="text-xs text-[var(--muted)] mt-3">Effectifs cumulés (clients, sociétés, produits) en fin de chaque mois.</p>
+          </div>
+
+          {/* Analyse Client / Société */}
+          <div className="p-6 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Analyse Client / Société</h3>
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <select
+                value={analyticsEntityType}
+                onChange={(e) => {
+                  const v = e.target.value as 'client' | 'company' | ''
+                  setAnalyticsEntityType(v)
+                  setAnalyticsEntityId('')
+                  setAnalyticsData(null)
+                }}
+                className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm min-w-[140px]"
+              >
+                <option value="">Sélectionner…</option>
+                <option value="client">Client</option>
+                <option value="company">Société</option>
+              </select>
+              {analyticsEntityType === 'client' && (
+                <select
+                  value={analyticsEntityId}
+                  onChange={(e) => setAnalyticsEntityId(e.target.value)}
+                  className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm min-w-[220px]"
+                >
+                  <option value="">Choisir un client</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {[c.firstName, c.lastName].filter(Boolean).join(' ') || c.companyName || c.id}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {analyticsEntityType === 'company' && (
+                <select
+                  value={analyticsEntityId}
+                  onChange={(e) => setAnalyticsEntityId(e.target.value)}
+                  className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm min-w-[220px]"
+                >
+                  <option value="">Choisir une société</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
+              {(analyticsEntityType && analyticsEntityId) ? (
+                <select
+                  value={analyticsYear}
+                  onChange={(e) => setAnalyticsYear(parseInt(e.target.value, 10))}
+                  className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm"
+                >
+                  {[currentYear, currentYear - 1, currentYear - 2].map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
+
+            {!analyticsEntityId ? (
+              <p className="text-sm text-[var(--muted)]">Sélectionnez un client ou une société pour afficher les graphiques.</p>
+            ) : analyticsLoading ? (
+              <div className="py-12 text-center text-[var(--muted)]">Chargement…</div>
+            ) : analyticsData ? (
+              (() => {
+                const revenueChartData = analyticsData.paidInvoicesByMonth.map((p) => {
+                  const cn = analyticsData.creditNotesRefundedByMonth.find((c) => c.month === p.month)
+                  const paidAmount = p.amount
+                  const creditNotesAmount = cn?.amount ?? 0
+                  return {
+                    month: p.month,
+                    label: p.label,
+                    paidAmount,
+                    creditNotesAmount,
+                    total: paidAmount - creditNotesAmount,
+                  }
+                })
+                return (
+                  <div className="space-y-8">
+                    <div>
+                      <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Factures payées (montant par mois)</h3>
+                      <div className="h-[220px]">
+                        <ResponsiveContainer width="100%" height={200}>
+                          <AreaChart data={analyticsData.paidInvoicesByMonth} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                            <defs>
+                              <linearGradient id="analyticsPaidGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="rgb(16 185 129)" stopOpacity={0.4} />
+                                <stop offset="100%" stopColor="rgb(16 185 129)" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                            <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" tickFormatter={(v) => `${v} €`} />
+                            <Tooltip content={<AnalyticsAmountTooltip valueLabel="Montant" />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                            <Area type="monotone" dataKey="amount" name="Montant" stroke="rgb(16 185 129)" strokeWidth={2} fill="url(#analyticsPaidGrad)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Devis envoyés (nombre par mois)</h3>
+                      <div className="h-[220px]">
+                        <ResponsiveContainer width="100%" height={200}>
+                          <AreaChart data={analyticsData.quotesSentByMonth} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                            <defs>
+                              <linearGradient id="analyticsSentGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="rgb(59 130 246)" stopOpacity={0.4} />
+                                <stop offset="100%" stopColor="rgb(59 130 246)" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                            <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                            <Tooltip content={<AnalyticsCountTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                            <Area type="monotone" dataKey="count" name="Nombre" stroke="rgb(59 130 246)" strokeWidth={2} fill="url(#analyticsSentGrad)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Devis signés (nombre par mois)</h3>
+                      <div className="h-[220px]">
+                        <ResponsiveContainer width="100%" height={200}>
+                          <AreaChart data={analyticsData.quotesSignedByMonth} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                            <defs>
+                              <linearGradient id="analyticsSignedGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="rgb(147 51 234)" stopOpacity={0.4} />
+                                <stop offset="100%" stopColor="rgb(147 51 234)" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                            <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                            <Tooltip content={<AnalyticsCountTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                            <Area type="monotone" dataKey="count" name="Nombre" stroke="rgb(147 51 234)" strokeWidth={2} fill="url(#analyticsSignedGrad)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Avoirs remboursés (montant par mois)</h3>
+                      <div className="h-[220px]">
+                        <ResponsiveContainer width="100%" height={200}>
+                          <AreaChart data={analyticsData.creditNotesRefundedByMonth} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                            <defs>
+                              <linearGradient id="analyticsRefundedGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="rgb(244 63 94)" stopOpacity={0.4} />
+                                <stop offset="100%" stopColor="rgb(244 63 94)" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                            <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" tickFormatter={(v) => `${v} €`} />
+                            <Tooltip content={<AnalyticsAmountTooltip valueLabel="Montant" />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                            <Area type="monotone" dataKey="amount" name="Montant" stroke="rgb(244 63 94)" strokeWidth={2} fill="url(#analyticsRefundedGrad)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Total CA client (revenus par mois)</h3>
+                      <div className="h-[220px]">
+                        <ResponsiveContainer width="100%" height={200}>
+                          <AreaChart data={revenueChartData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                            <defs>
+                              <linearGradient id="analyticsRevenueGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="rgb(34 197 94)" stopOpacity={0.4} />
+                                <stop offset="100%" stopColor="rgb(34 197 94)" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                            <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" tickFormatter={(v) => `${v} €`} />
+                            <Tooltip content={<AnalyticsRevenueTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                            <Area type="monotone" dataKey="total" name="CA net" stroke="rgb(34 197 94)" strokeWidth={2} fill="url(#analyticsRevenueGrad)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()
+            ) : (
+              <p className="text-sm text-[var(--muted)]">Aucune donnée pour cette sélection.</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ——— 6. Export ——— */}
       <section>
         <h2 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider mb-4">Exports et rapports</h2>
         <div className="flex flex-wrap gap-3">

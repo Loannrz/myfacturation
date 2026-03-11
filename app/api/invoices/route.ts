@@ -9,15 +9,38 @@ import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-docum
 export const dynamic = 'force-dynamic'
 
 
+/** Retourne le nombre de jours de retard (0+ si échéance dépassée), ou null si pas en retard. */
+function getOverdueDays(dueDate: string | null, today: string): number | null {
+  if (!dueDate || dueDate >= today) return null
+  const due = new Date(dueDate)
+  const t = new Date(today)
+  const diffMs = t.getTime() - due.getTime()
+  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000))
+  return days >= 0 ? days : null
+}
+
 export async function GET(req: NextRequest) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status') ?? undefined
+  const filter = searchParams.get('filter') ?? undefined // all | paid | unpaid | overdue
   const q = searchParams.get('q') ?? ''
-  const where: { userId: string; status?: string; number?: { contains: string } } = { userId: session.id }
+  const where: {
+    userId: string
+    status?: string | { not?: string; in?: string[] }
+    dueDate?: { lt: string; not: null }
+    number?: { contains: string }
+  } = { userId: session.id }
   if (status) where.status = status
+  else if (filter === 'paid') where.status = 'paid'
+  else if (filter === 'unpaid') where.status = { in: ['draft', 'sent', 'pending', 'late'] }
+  else if (filter === 'overdue') {
+    const todayStr = new Date().toISOString().slice(0, 10)
+    where.status = { not: 'paid' }
+    where.dueDate = { lt: todayStr, not: null }
+  }
   if (q.trim()) where.number = { contains: q.trim() }
 
   // Échéance dépassée → passer en "En retard", sauf si payée ou annulée
@@ -36,7 +59,12 @@ export async function GET(req: NextRequest) {
     include: { client: true, company: true, lines: true },
     orderBy: { createdAt: 'desc' },
   })
-  return NextResponse.json(invoices)
+
+  const withOverdue = invoices.map((inv) => {
+    const overdueDays = getOverdueDays(inv.dueDate, today)
+    return { ...inv, overdueDays: overdueDays ?? undefined }
+  })
+  return NextResponse.json(withOverdue)
 }
 
 export async function POST(req: NextRequest) {

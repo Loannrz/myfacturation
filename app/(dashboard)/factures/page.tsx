@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Receipt, Download, Search, AlertCircle, Pencil, Trash2 } from 'lucide-react'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
@@ -14,6 +15,7 @@ type Invoice = {
   issueDate: string
   dueDate: string | null
   paidAt: string | null
+  overdueDays?: number
   client: { firstName: string; lastName: string; companyName: string | null } | null
   company: { name: string } | null
 }
@@ -54,10 +56,20 @@ const statusFilterOptions = [
   { value: 'late', label: 'En retard' },
 ]
 
+const filterOptions = [
+  { value: '', label: 'Toutes' },
+  { value: 'paid', label: 'Payées' },
+  { value: 'unpaid', label: 'Impayées' },
+  { value: 'overdue', label: 'En retard' },
+]
+
 export default function FacturesPage() {
+  const searchParams = useSearchParams()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const urlFilter = useMemo(() => searchParams.get('filter') ?? '', [searchParams])
+  const [filter, setFilter] = useState(urlFilter) // Toutes | Payées | Impayées | En retard
   const [loading, setLoading] = useState(true)
   const [canCreate, setCanCreate] = useState<boolean | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -69,11 +81,16 @@ export default function FacturesPage() {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     if (statusFilter) params.set('status', statusFilter)
+    if (filter) params.set('filter', filter)
     fetch(`/api/invoices?${params}`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setInvoices)
       .finally(() => setLoading(false))
-  }, [q, statusFilter])
+  }, [q, statusFilter, filter])
+
+  useEffect(() => {
+    setFilter(urlFilter)
+  }, [urlFilter])
 
   useEffect(() => {
     Promise.all([fetch('/api/me').then((r) => r.ok ? r.json() : null), fetch('/api/settings').then((r) => r.ok ? r.json() : null)])
@@ -154,6 +171,16 @@ export default function FacturesPage() {
           />
         </div>
         <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] min-w-[140px]"
+          title="Filtre rapide"
+        >
+          {filterOptions.map((opt) => (
+            <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] min-w-[180px]"
@@ -178,6 +205,7 @@ export default function FacturesPage() {
                 <th className="text-left py-3 px-4 text-sm font-medium">Montant</th>
                 <th className="text-left py-3 px-4 text-sm font-medium">Statut</th>
                 <th className="text-left py-3 px-4 text-sm font-medium">Échéance</th>
+                <th className="text-left py-3 px-4 text-sm font-medium">Retard</th>
                 <th className="text-right py-3 px-4 text-sm font-medium">Actions</th>
               </tr>
             </thead>
@@ -228,6 +256,16 @@ export default function FacturesPage() {
                     )}
                   </td>
                   <td className="py-3 px-4 text-sm text-[var(--muted)]">{inv.dueDate || '—'}</td>
+                  <td className="py-3 px-4">
+                    {inv.overdueDays != null && inv.overdueDays >= 0 ? (
+                      <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 text-sm font-medium">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        {inv.overdueDays} jour{inv.overdueDays !== 1 ? 's' : ''} de retard
+                      </span>
+                    ) : (
+                      <span className="text-[var(--muted)]">—</span>
+                    )}
+                  </td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       <Link
