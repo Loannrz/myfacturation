@@ -53,6 +53,9 @@ export async function POST(req: NextRequest) {
         planType: 'free',
       },
     })
+    await prisma.systemEvent.create({
+      data: { eventType: 'user_signup', userId: user.id, metadata: JSON.stringify({ email: user.email }) },
+    }).catch(() => {})
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
     sendWelcomeEmail(email, {

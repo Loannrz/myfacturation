@@ -33,8 +33,11 @@ export function AdminSidebar() {
   const pathname = usePathname()
   const [supportUnread, setSupportUnread] = useState(0)
   useEffect(() => {
-    fetch('/api/admin/conversations/unread-count').then((r) => r.json()).then((d) => typeof d.count === 'number' && setSupportUnread(d.count)).catch(() => {})
-  }, [])
+    fetch('/api/admin/conversations/unread-count', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { count: 0 }))
+      .then((d) => setSupportUnread(typeof d?.count === 'number' ? d.count : 0))
+      .catch(() => setSupportUnread(0))
+  }, [pathname])
 
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--background)]">
@@ -50,7 +53,7 @@ export function AdminSidebar() {
           }`}
         >
           <MessageCircle className="w-4 h-4 shrink-0" />
-          Support{supportUnread > 0 ? ` (${supportUnread})` : ''}
+          Support ({supportUnread})
         </Link>
         {adminNav.map(({ href, label, icon: Icon }) => {
           const isActive = href === '/admin' ? pathname === '/admin' : pathname?.startsWith(href)

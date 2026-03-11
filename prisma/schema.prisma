@@ -88,14 +88,15 @@ model User {
 
 // ——— Support / messagerie interne ———
 model Conversation {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject    String    @db.Text
-  status     String    @default("open")   // open | resolved
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  messages   Message[]
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject            String    @db.Text
+  status             String    @default("open")   // open | resolved
+  adminLastOpenedAt   DateTime? // dernière ouverture par l'admin (pour afficher "Ouvert le ...")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  messages           Message[]
   @@index([userId])
   @@index([status])
 }
@@ -355,6 +356,30 @@ model ActivityLog {
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
+}
+
+// Événements système (webhook Stripe, etc.) pour le dashboard admin
+model SystemEvent {
+  id         String   @id @default(cuid())
+  eventType  String   // user_signup, subscription_started, subscription_canceled, payment_success, payment_failed
+  userId     String?
+  metadata   String?  @db.Text // JSON
+  createdAt  DateTime @default(now())
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+// Log des emails envoyés (transactionnels, etc.) pour le dashboard admin
+model EmailLog {
+  id          String   @id @default(cuid())
+  emailType   String   // welcome, trial_start, payment_success, etc.
+  recipient   String
+  subject     String   @db.Text
+  bodyPreview String?  @db.Text
+  bodyFull    String?  @db.Text
+  userId      String?
+  createdAt   DateTime @default(now())
+  @@index([createdAt])
 }
 
 model BillingSettings {

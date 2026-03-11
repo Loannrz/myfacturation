@@ -87,10 +87,17 @@ export default function HomePage() {
               <div className="lg:col-span-8 space-y-4">
                 <h3 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider">Factures récentes</h3>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--background)]/60 divide-y divide-[var(--border)]">
-                  {['FAC-2024-012', 'FAC-2024-011', 'FAC-2024-010'].map((n, i) => (
-                    <div key={n} className="flex items-center justify-between px-4 py-3">
-                      <span className="font-mono text-sm">{n}</span>
-                      <span className="text-sm text-[var(--muted)]">{['1 200 €', '890 €', '2 100 €'][i]}</span>
+                  {[
+                    { number: 'FAC-2024-187', label: 'Prestation conseil', amount: '3 550 €' },
+                    { number: 'FAC-2023-042', label: 'Formation & support', amount: '10 720 €' },
+                    { number: 'FAC-2024-521', label: 'Ajustement acompte', amount: '5 €' },
+                  ].map((inv) => (
+                    <div key={inv.number} className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <span className="font-mono text-sm block">{inv.number}</span>
+                        <span className="text-xs text-[var(--muted)]">{inv.label}</span>
+                      </div>
+                      <span className="text-sm font-medium text-[var(--muted)]">{inv.amount}</span>
                     </div>
                   ))}
                 </div>

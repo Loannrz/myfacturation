@@ -31,6 +31,7 @@ export async function GET() {
     id: c.id,
     subject: c.subject,
     status: c.status,
+    adminLastOpenedAt: c.adminLastOpenedAt?.toISOString() ?? null,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     user: c.user,

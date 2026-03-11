@@ -12,6 +12,7 @@
     "db:push": "node scripts/with-db-env.cjs db push",
     "db:migrate": "node scripts/with-db-env.cjs migrate dev",
     "db:migrate:deploy": "node scripts/with-db-env.cjs migrate deploy",
+    "db:migrate:resolve": "node scripts/with-db-env.cjs migrate resolve",
     "db:studio": "node scripts/with-db-env.cjs studio",
     "db:seed": "node scripts/with-db-env.cjs db seed",
     "env:pull": "vercel env pull .env.local"

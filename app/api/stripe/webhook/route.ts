@@ -58,6 +58,11 @@ export async function POST(req: NextRequest) {
         await handleSubscriptionDeleted(sub)
         break
       }
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice
+        await handleInvoicePaymentFailed(invoice)
+        break
+      }
       default:
         // Unhandled event type
         break
@@ -115,6 +120,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     },
   })
 
+  await prisma.systemEvent.create({
+    data: { eventType: 'subscription_started', userId, metadata: JSON.stringify({ subscriptionId, plan: subData.items?.data?.[0]?.price?.id }) },
+  }).catch(() => {})
+
   if (subData.status === 'trialing') {
     const u = await prisma.user.findUnique({
       where: { id: userId },
@@ -146,6 +155,10 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
     select: { id: true, email: true, name: true, subscriptionPlan: true },
   })
   if (!user) return
+
+  await prisma.systemEvent.create({
+    data: { eventType: 'payment_success', userId: user.id, metadata: JSON.stringify({ amount: invoice.amount_paid, currency: invoice.currency }) },
+  }).catch(() => {})
 
   await prisma.user.update({
     where: { id: user.id },
@@ -301,6 +314,10 @@ async function handleSubscriptionDeleted(sub: Stripe.Subscription) {
   }
   if (!userId) return
 
+  await prisma.systemEvent.create({
+    data: { eventType: 'subscription_canceled', userId, metadata: null },
+  }).catch(() => {})
+
   await prisma.user.update({
     where: { id: userId },
     data: {
@@ -322,4 +339,24 @@ async function handleSubscriptionDeleted(sub: Stripe.Subscription) {
       dashboardUrl: `${baseUrl.replace(/\/$/, '')}/dashboard`,
     }).catch((err) => console.error('[webhook] cancellation email', err))
   }
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  const inv = invoice as unknown as { subscription?: string | { id?: string } }
+  const subscriptionId = typeof inv.subscription === 'string' ? inv.subscription : inv.subscription?.id
+  let userId: string | undefined
+  if (subscriptionId) {
+    const user = await prisma.user.findFirst({
+      where: { stripeSubscriptionId: subscriptionId },
+      select: { id: true },
+    })
+    userId = user?.id
+  }
+  await prisma.systemEvent.create({
+    data: {
+      eventType: 'payment_failed',
+      userId: userId ?? undefined,
+      metadata: JSON.stringify({ amount: invoice.amount_due, currency: invoice.currency }),
+    },
+  }).catch(() => {})
 }

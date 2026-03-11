@@ -22,12 +22,25 @@ export async function GET(
   })
   if (!conversation) return NextResponse.json({ error: 'Discussion introuvable' }, { status: 404 })
 
-  await prisma.message.updateMany({
-    where: { conversationId: id, senderRole: 'user', isRead: false },
-    data: { isRead: true },
-  })
+  await prisma.$transaction([
+    prisma.message.updateMany({
+      where: { conversationId: id, senderRole: 'user', isRead: false },
+      data: { isRead: true },
+    }),
+    prisma.conversation.update({
+      where: { id },
+      data: { adminLastOpenedAt: new Date() },
+    }),
+  ])
 
-  return NextResponse.json(conversation)
+  const updated = await prisma.conversation.findUnique({
+    where: { id },
+    include: {
+      user: { select: { id: true, name: true, email: true } },
+      messages: { orderBy: { createdAt: 'asc' } },
+    },
+  })
+  return NextResponse.json(updated)
 }
 
 /** Admin : répondre ou mettre à jour le statut */
@@ -45,6 +58,10 @@ export async function POST(
   const body = await req.json()
   const message = (body.message as string)?.trim()
   if (message) {
+    await prisma.message.updateMany({
+      where: { conversationId: id, senderRole: 'user', isRead: false },
+      data: { isRead: true },
+    })
     const created = await prisma.message.create({
       data: {
         conversationId: id,

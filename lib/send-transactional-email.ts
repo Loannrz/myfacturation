@@ -4,6 +4,7 @@
  */
 
 import { sendMail } from '@/lib/smtp'
+import { logEmailSent } from '@/lib/email-log'
 import {
   buildWelcomeEmailHtml,
   buildTrialStartEmailHtml,
@@ -28,24 +29,18 @@ export type SendResult = { ok: boolean; error?: string }
 export async function sendWelcomeEmail(to: string, data: WelcomeEmailData): Promise<SendResult> {
   const loginUrl = data.loginUrl.startsWith('http') ? data.loginUrl : `${base}/login`
   const html = buildWelcomeEmailHtml({ ...data, loginUrl })
-  const res = await sendMail({
-    to,
-    subject: `Bienvenue sur ${process.env.NEXT_PUBLIC_APP_NAME ?? 'Myfacturation360'}`,
-    html,
-    action: 'transactional-welcome',
-  })
+  const subject = `Bienvenue sur ${process.env.NEXT_PUBLIC_APP_NAME ?? 'Myfacturation360'}`
+  const res = await sendMail({ to, subject, html, action: 'transactional-welcome' })
+  if (res.ok) logEmailSent({ emailType: 'welcome', recipient: to, subject, bodyPreview: html.slice(0, 200), bodyFull: html }).catch(() => {})
   return { ok: res.ok, error: res.error }
 }
 
 export async function sendTrialStartEmail(to: string, data: TrialStartEmailData): Promise<SendResult> {
   const manageUrl = data.manageUrl.startsWith('http') ? data.manageUrl : `${base}/settings/billing`
   const html = buildTrialStartEmailHtml({ ...data, manageUrl })
-  const res = await sendMail({
-    to,
-    subject: 'Votre essai gratuit a commencé',
-    html,
-    action: 'transactional-trial-start',
-  })
+  const subject = 'Votre essai gratuit a commencé'
+  const res = await sendMail({ to, subject, html, action: 'transactional-trial-start' })
+  if (res.ok) logEmailSent({ emailType: 'trial_start', recipient: to, subject, bodyPreview: html.slice(0, 200), bodyFull: html }).catch(() => {})
   return { ok: res.ok, error: res.error }
 }
 
@@ -53,12 +48,9 @@ export async function sendTrialEndingEmail(to: string, data: TrialEndingEmailDat
   const continueUrl = data.continueUrl.startsWith('http') ? data.continueUrl : `${base}/formules`
   const cancelUrl = data.cancelUrl.startsWith('http') ? data.cancelUrl : `${base}/parametres`
   const html = buildTrialEndingEmailHtml({ ...data, continueUrl, cancelUrl })
-  const res = await sendMail({
-    to,
-    subject: 'Votre essai gratuit se termine bientôt',
-    html,
-    action: 'transactional-trial-ending',
-  })
+  const subject = 'Votre essai gratuit se termine bientôt'
+  const res = await sendMail({ to, subject, html, action: 'transactional-trial-ending' })
+  if (res.ok) logEmailSent({ emailType: 'trial_ending', recipient: to, subject, bodyPreview: html.slice(0, 200), bodyFull: html }).catch(() => {})
   return { ok: res.ok, error: res.error }
 }
 
@@ -69,25 +61,18 @@ export async function sendPaymentSuccessEmail(to: string, data: PaymentSuccessEm
     data.invoicePdfBuffer && data.invoicePdfFilename
       ? [{ filename: data.invoicePdfFilename, content: data.invoicePdfBuffer, mimeType: 'application/pdf' as const }]
       : undefined
-  const res = await sendMail({
-    to,
-    subject: 'Paiement reçu – Facturation',
-    html,
-    action: 'transactional-payment-success',
-    attachments,
-  })
+  const subject = 'Paiement reçu – Facturation'
+  const res = await sendMail({ to, subject, html, action: 'transactional-payment-success', attachments })
+  if (res.ok) logEmailSent({ emailType: 'payment_success', recipient: to, subject, bodyPreview: html.slice(0, 200), bodyFull: html }).catch(() => {})
   return { ok: res.ok, error: res.error }
 }
 
 export async function sendCancellationEmail(to: string, data: CancellationEmailData): Promise<SendResult> {
   const dashboardUrl = data.dashboardUrl.startsWith('http') ? data.dashboardUrl : `${base}/dashboard`
   const html = buildCancellationEmailHtml({ ...data, dashboardUrl })
-  const res = await sendMail({
-    to,
-    subject: 'Annulation de votre abonnement',
-    html,
-    action: 'transactional-cancellation',
-  })
+  const subject = 'Annulation de votre abonnement'
+  const res = await sendMail({ to, subject, html, action: 'transactional-cancellation' })
+  if (res.ok) logEmailSent({ emailType: 'cancellation', recipient: to, subject, bodyPreview: html.slice(0, 200), bodyFull: html }).catch(() => {})
   return { ok: res.ok, error: res.error }
 }
 
@@ -129,12 +114,9 @@ export async function sendWeeklyEmail(to: string, data: Omit<WeeklyEmailData, 'b
     ctaLabel,
     ctaUrl,
   })
-  const res = await sendMail({
-    to,
-    subject: `${process.env.NEXT_PUBLIC_APP_NAME ?? 'Myfacturation360'} – Récap de la semaine`,
-    html,
-    action: 'transactional-weekly',
-  })
+  const subject = `${process.env.NEXT_PUBLIC_APP_NAME ?? 'Myfacturation360'} – Récap de la semaine`
+  const res = await sendMail({ to, subject, html, action: 'transactional-weekly' })
+  if (res.ok) logEmailSent({ emailType: 'weekly', recipient: to, subject, bodyPreview: html.slice(0, 200), bodyFull: html }).catch(() => {})
   return { ok: res.ok, error: res.error }
 }
 

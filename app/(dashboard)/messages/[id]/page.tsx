@@ -109,7 +109,10 @@ export default function MessageThreadPage() {
       </div>
 
       {conversation.status === 'resolved' ? (
-        <p className="py-4 text-sm text-[var(--muted)]">Cette discussion est résolue.</p>
+        <div className="py-4 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Le ticket a été résolu.</p>
+          <p className="text-xs text-[var(--muted)] mt-1">L&apos;historique de la conversation reste visible ci-dessus.</p>
+        </div>
       ) : (
         <form onSubmit={handleSend} className="flex gap-2 py-4 border-t border-[var(--border)]">
           <input
