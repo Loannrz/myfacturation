@@ -114,23 +114,41 @@ export async function DELETE(
   const email = user.email?.trim().toLowerCase()
   if (email) {
     try {
-      await prisma.deletedEmail.upsert({
+      await (prisma as unknown as { deletedEmail: { upsert: (arg: unknown) => Promise<unknown> } }).deletedEmail.upsert({
         where: { email },
         create: { email },
         update: { deletedAt: new Date() },
       })
     } catch {
-      // Table DeletedEmail absente (migration non appliquée) ou autre erreur : on continue la suppression
+      // Table DeletedEmail absente (migration non appliquée) : on continue
     }
   }
 
   try {
-    await prisma.user.delete({ where: { id } })
+    await prisma.$transaction(async (tx) => {
+      await tx.message.deleteMany({ where: { conversation: { userId: id } } })
+      await tx.conversation.deleteMany({ where: { userId: id } })
+      await tx.billingProduct.deleteMany({ where: { userId: id } })
+      await tx.billingSettings.deleteMany({ where: { userId: id } })
+      await tx.activityLog.deleteMany({ where: { userId: id } })
+      await tx.expense.deleteMany({ where: { userId: id } })
+      await tx.creditNoteLine.deleteMany({ where: { creditNote: { userId: id } } })
+      await tx.creditNote.deleteMany({ where: { userId: id } })
+      await tx.invoiceLine.deleteMany({ where: { invoice: { userId: id } } })
+      await tx.invoice.deleteMany({ where: { userId: id } })
+      await tx.quoteLine.deleteMany({ where: { quote: { userId: id } } })
+      await tx.quote.deleteMany({ where: { userId: id } })
+      await tx.client.deleteMany({ where: { userId: id } })
+      await tx.company.deleteMany({ where: { userId: id } })
+      await tx.account.deleteMany({ where: { userId: id } })
+      await tx.session.deleteMany({ where: { userId: id } })
+      await tx.user.delete({ where: { id } })
+    })
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[admin DELETE user]', id, err)
     return NextResponse.json(
-      { error: 'Impossible de supprimer le compte. Les données liées ont peut-être bloqué la suppression.' },
+      { error: 'Impossible de supprimer le compte.' },
       { status: 500 }
     )
   }
