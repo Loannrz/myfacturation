@@ -530,8 +530,9 @@ async function generateDocumentPDF(
   if (showBankSection && selectedBank) {
     page.drawText('Coordonnées bancaires', { x: colMid + 12, y: sectionStartY, size: 10, font: fontBold, color: COLORS.primary })
     let yRightCol = sectionStartY - 16
-    if (selectedBank.accountHolder) {
-      page.drawText(`Titulaire : ${sanitize(selectedBank.accountHolder)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
+    const accountHolderLabel = selectedBank.accountHolder?.trim() || 'myfacturation360 by myeventoo'
+    if (accountHolderLabel) {
+      page.drawText(`Titulaire : ${sanitize(accountHolderLabel)}`, { x: colMid + 12, y: yRightCol, size: 9, font, color: COLORS.secondary })
       yRightCol -= 12
     }
     if (selectedBank.bankName) {

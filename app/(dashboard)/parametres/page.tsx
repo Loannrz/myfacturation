@@ -10,8 +10,10 @@ import { planLabel, canAccessFeatureByPlan, maxEstablishments, maxBankAccounts }
 type BankAccountEntry = { id: string; name: string; accountHolder: string; bankName: string; iban: string; bic: string }
 type EmitterProfileEntry = { id: string; name: string; companyName: string; legalStatus: string; siret: string; vatNumber?: string; apeCode?: string; address: string; postalCode: string; city: string; country?: string; phone?: string; email?: string; website?: string }
 
+const DEFAULT_BANK_ACCOUNT_HOLDER = 'myfacturation360 by myeventoo'
+
 function newBankAccount(): BankAccountEntry {
-  return { id: crypto.randomUUID(), name: '', accountHolder: '', bankName: '', iban: '', bic: '' }
+  return { id: crypto.randomUUID(), name: '', accountHolder: DEFAULT_BANK_ACCOUNT_HOLDER, bankName: '', iban: '', bic: '' }
 }
 
 function newEmitterProfile(): EmitterProfileEntry {
@@ -73,6 +75,9 @@ export default function ParametresPage() {
   const [changeEmailMessage, setChangeEmailMessage] = useState('')
   const [changeEmailCodeDisplay, setChangeEmailCodeDisplay] = useState<string | null>(null)
   const [subscriptionPlan, setSubscriptionPlan] = useState<'starter' | 'pro' | 'business'>('starter')
+  const [stripeSubscriptionId, setStripeSubscriptionId] = useState<string | null>(null)
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null)
+  const [cancelSubscriptionLoading, setCancelSubscriptionLoading] = useState(false)
   const searchParams = useSearchParams()
   const { data: session, update: updateSession } = useSession()
   const initialEffectRuns = useRef(0)
@@ -98,6 +103,8 @@ export default function ParametresPage() {
     const planVal = (plan === 'pro' || plan === 'business' ? plan : 'starter') as 'starter' | 'pro' | 'business'
     setSubscriptionPlan(planVal)
     lastSyncedPlanRef.current = planVal
+    setStripeSubscriptionId((user.stripeSubscriptionId as string) ?? null)
+    setSubscriptionStatus((user.subscriptionStatus as string) ?? null)
     setAccountEmail((user.email as string) ?? '')
     setProfile({ name: (user.name as string) ?? '', email: (user.email as string) ?? '', phone: (user.phone as string) ?? '' })
     const emitters = Array.isArray(settings.emitterProfiles) ? settings.emitterProfiles : []
@@ -390,6 +397,37 @@ export default function ParametresPage() {
         {subscriptionPlan === 'business' && (
           <p className="text-sm text-[var(--muted)]">Toutes les fonctionnalités sont débloquées.</p>
         )}
+        {(subscriptionPlan === 'pro' || subscriptionPlan === 'business') && stripeSubscriptionId && subscriptionStatus === 'active' && (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm('Résilier votre abonnement ? Vous repasserez sur la formule Starter à la fin de la période déjà payée.')) return
+                setCancelSubscriptionLoading(true)
+                try {
+                  const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' })
+                  const data = await res.json()
+                  if (data.ok) {
+                    setSubscriptionPlan('starter')
+                    setStripeSubscriptionId(null)
+                    setSubscriptionStatus('cancelled')
+                    setMessage('Abonnement résilié. Vous gardez l’accès jusqu’à la fin de la période payée.')
+                  } else {
+                    setMessage(data.error || 'Erreur')
+                  }
+                } catch {
+                  setMessage('Erreur lors de la résiliation.')
+                } finally {
+                  setCancelSubscriptionLoading(false)
+                }
+              }}
+              disabled={cancelSubscriptionLoading}
+              className="inline-flex px-4 py-2 rounded-lg border border-red-500/50 text-red-600 dark:text-red-400 font-medium text-sm hover:bg-red-500/10 disabled:opacity-50"
+            >
+              {cancelSubscriptionLoading ? 'Résiliation…' : 'Résilier l’abonnement'}
+            </button>
+          </div>
+        )}
         <p className="text-sm text-[var(--muted)] mt-4">
           <Link href="/settings/billing" className="text-violet-600 dark:text-violet-400 hover:underline">
             Facturation & abonnement
@@ -641,7 +679,7 @@ export default function ParametresPage() {
                     value={acc.accountHolder}
                     onChange={(e) => setBankAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, accountHolder: e.target.value } : a)))}
                     className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
-                    placeholder="Jean Dupont"
+                    placeholder={DEFAULT_BANK_ACCOUNT_HOLDER}
                   />
                 </div>
                 <div>
