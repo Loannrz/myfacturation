@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Search, Eye, Mail, UserPlus } from 'lucide-react'
+import { Search, Eye, Mail, UserPlus, Send, ChevronDown } from 'lucide-react'
 
 type UserRow = {
   id: string
@@ -31,6 +31,34 @@ export default function AdminUsersPage() {
   const [createName, setCreateName] = useState('')
   const [createLoading, setCreateLoading] = useState(false)
   const [createMessage, setCreateMessage] = useState('')
+  const [emailMenuOpen, setEmailMenuOpen] = useState<string | null>(null)
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null)
+
+  const EMAIL_OPTIONS = [
+    { id: 'welcome', label: 'Email bienvenue' },
+    { id: 'trial_start', label: 'Email début essai' },
+    { id: 'trial_ending', label: 'Email fin essai' },
+    { id: 'payment_success', label: 'Email paiement réussi' },
+    { id: 'cancellation', label: 'Email annulation' },
+    { id: 'weekly', label: 'Email hebdomadaire' },
+  ] as const
+
+  const sendTransactionalEmail = (userId: string, type: string) => {
+    setEmailMenuOpen(null)
+    setSendingEmail(`${userId}-${type}`)
+    fetch('/api/admin/send-transactional-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, userId }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) alert(`Email envoyé à l'utilisateur.`)
+        else alert(data.error || 'Erreur')
+      })
+      .catch(() => alert('Erreur'))
+      .finally(() => setSendingEmail(null))
+  }
 
   const fetchUsers = (p = page, q?: string) => {
     setLoading(true)
@@ -249,6 +277,37 @@ export default function AdminUsersPage() {
                         <Mail className="w-3 h-3" />
                         {sendingReset === u.id ? '…' : 'Reset email'}
                       </button>
+                      <div className="relative inline-block">
+                        <button
+                          type="button"
+                          onClick={() => setEmailMenuOpen(emailMenuOpen === u.id ? null : u.id)}
+                          disabled={!!sendingEmail}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--border)]/20 disabled:opacity-50"
+                          title="Envoyer un email"
+                        >
+                          <Send className="w-3 h-3" />
+                          Envoyer email
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                        {emailMenuOpen === u.id && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setEmailMenuOpen(null)} aria-hidden />
+                            <div className="absolute right-0 top-full mt-1 z-20 min-w-[180px] py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-lg">
+                              {EMAIL_OPTIONS.map((opt) => (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  onClick={() => sendTransactionalEmail(u.id, opt.id)}
+                                  disabled={!!sendingEmail}
+                                  className="block w-full text-left px-3 py-2 text-xs hover:bg-[var(--border)]/20 disabled:opacity-50"
+                                >
+                                  {sendingEmail === `${u.id}-${opt.id}` ? 'Envoi…' : opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

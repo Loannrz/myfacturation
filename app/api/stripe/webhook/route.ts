@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import { stripe, planFromPriceId, mappingFromPlanKey } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { planTypeFromSubscription } from '@/lib/subscription'
+import { sendTrialStartEmail, sendPaymentSuccessEmail, sendCancellationEmail } from '@/lib/send-transactional-email'
 import Stripe from 'stripe'
 
 export const dynamic = 'force-dynamic'
@@ -111,6 +112,26 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       ...(hadTrial ? { hasUsedTrial: true } : {}),
     },
   })
+
+  if (subData.status === 'trialing') {
+    const u = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true },
+    })
+    if (u?.email) {
+      const trialEnd = subscriptionEnd ? subscriptionEnd.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''
+      const planLabel = mapping.plan === 'business' ? 'Business' : 'Pro'
+      const priceAfter = mapping.plan === 'business' ? '12 €/mois' : '5 €/mois'
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+      sendTrialStartEmail(u.email, {
+        recipientName: u.name,
+        trialEndDate: trialEnd,
+        planLabel,
+        priceAfterTrial: priceAfter,
+        manageUrl: `${baseUrl.replace(/\/$/, '')}/parametres`,
+      }).catch((err) => console.error('[webhook] trial start email', err))
+    }
+  }
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
@@ -120,7 +141,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 
   const user = await prisma.user.findFirst({
     where: { stripeSubscriptionId: subscriptionId },
-    select: { id: true },
+    select: { id: true, email: true, name: true, subscriptionPlan: true },
   })
   if (!user) return
 
@@ -133,6 +154,22 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
         : {}),
     },
   })
+
+  if (user.email) {
+    const amountPaid = invoice.amount_paid != null ? (invoice.amount_paid / 100).toFixed(2).replace('.', ',') + ' €' : '—'
+    const billingDate = invoice.created != null
+      ? new Date(invoice.created * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+      : ''
+    const planLabel = user.subscriptionPlan === 'business' ? 'Business' : user.subscriptionPlan === 'pro' ? 'Pro' : 'Starter'
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    sendPaymentSuccessEmail(user.email, {
+      recipientName: user.name,
+      amount: amountPaid,
+      billingDate,
+      planLabel,
+      dashboardUrl: `${baseUrl.replace(/\/$/, '')}/dashboard`,
+    }).catch((err) => console.error('[webhook] payment success email', err))
+  }
 }
 
 async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
@@ -190,16 +227,47 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
     where: { id: userId },
     data,
   })
+
+  const subStripe = sub as unknown as { cancel_at_period_end?: boolean; current_period_end?: number }
+  if (subStripe.cancel_at_period_end) {
+    const u = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true },
+    })
+    if (u?.email) {
+      const endTs = subStripe.current_period_end
+      const accessEndDate = typeof endTs === 'number' && Number.isFinite(endTs)
+        ? new Date(endTs * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+        : new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+      sendCancellationEmail(u.email, {
+        recipientName: u.name,
+        accessEndDate,
+        dashboardUrl: `${baseUrl.replace(/\/$/, '')}/dashboard`,
+      }).catch((err) => console.error('[webhook] cancellation (cancel_at_period_end) email', err))
+    }
+  }
 }
 
 async function handleSubscriptionDeleted(sub: Stripe.Subscription) {
   let userId = sub.metadata?.userId as string | undefined
+  let userEmail: string | null = null
+  let userName: string | null = null
   if (!userId) {
     const user = await prisma.user.findFirst({
       where: { stripeSubscriptionId: sub.id },
-      select: { id: true },
+      select: { id: true, email: true, name: true },
     })
     userId = user?.id ?? undefined
+    userEmail = user?.email ?? null
+    userName = user?.name ?? null
+  } else {
+    const u = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true },
+    })
+    userEmail = u?.email ?? null
+    userName = u?.name ?? null
   }
   if (!userId) return
 
@@ -214,4 +282,14 @@ async function handleSubscriptionDeleted(sub: Stripe.Subscription) {
       subscriptionEnd: new Date(),
     },
   })
+
+  if (userEmail) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const accessEndDate = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    sendCancellationEmail(userEmail, {
+      recipientName: userName,
+      accessEndDate,
+      dashboardUrl: `${baseUrl.replace(/\/$/, '')}/dashboard`,
+    }).catch((err) => console.error('[webhook] cancellation email', err))
+  }
 }

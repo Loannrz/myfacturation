@@ -13,6 +13,7 @@ import {
   Shield,
   Lock,
   MessageCircle,
+  Mail,
 } from 'lucide-react'
 
 const adminNav = [
@@ -21,6 +22,7 @@ const adminNav = [
   { href: '/admin/subscriptions', label: 'Abonnements', icon: CreditCard },
   { href: '/admin/plans', label: 'Plans', icon: Package },
   { href: '/admin/features', label: 'Permissions', icon: Key },
+  { href: '/admin/emails', label: 'Emails', icon: Mail },
   { href: '/admin/stats', label: 'Statistiques', icon: BarChart3 },
   { href: '/admin/password', label: 'Modifier mon mot de passe', icon: Lock },
 ]

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { sendVerificationCodeEmail } from '@/utils/sendVerificationCodeEmail'
+import { sendWelcomeEmail } from '@/lib/send-transactional-email'
 
 const CODE_LENGTH = 6
 const CODE_EXPIRY_MINUTES = 15
@@ -53,8 +54,13 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    let message: string
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    sendWelcomeEmail(email, {
+      recipientName: user.name,
+      loginUrl: `${baseUrl.replace(/\/$/, '')}/login`,
+    }).catch((err) => console.error('[signup] welcome email', err))
 
+    let message: string
     if (skipVerification) {
       message = 'Compte créé. Vous pouvez vous connecter.'
     } else {
