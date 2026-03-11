@@ -97,6 +97,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const subscriptionStatus = subData.status === 'trialing' ? 'trialing' : 'active'
   const hadTrial = subData.status === 'trialing' || (subData.trial_end != null && subData.trial_end > 0)
   const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null
+  const startTs = subData.current_period_start
+  const endTs = subData.current_period_end
+  const subscriptionStart =
+    typeof startTs === 'number' && Number.isFinite(startTs) ? new Date(startTs * 1000) : null
+  const subscriptionEnd =
+    typeof endTs === 'number' && Number.isFinite(endTs) ? new Date(endTs * 1000) : null
   await prisma.user.update({
     where: { id: userId },
     data: {
@@ -106,8 +112,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       subscriptionStatus,
       stripeCustomerId: customerId ?? undefined,
       stripeSubscriptionId: subscriptionId,
-      subscriptionStart: new Date(subData.current_period_start * 1000),
-      subscriptionEnd: new Date(subData.current_period_end * 1000),
+      ...(subscriptionStart != null ? { subscriptionStart } : {}),
+      ...(subscriptionEnd != null ? { subscriptionEnd } : {}),
       ...(hadTrial ? { hasUsedTrial: true } : {}),
     },
   })
@@ -160,18 +166,24 @@ async function handleSubscriptionUpdated(sub: Stripe.Subscription) {
   let mapping = planFromPriceId(priceId)
   if (!mapping) mapping = mappingFromPlanKey(planKeyFromMeta)
 
+  const startTs = subData.current_period_start
+  const endTs = subData.current_period_end
+  const subscriptionStart =
+    typeof startTs === 'number' && Number.isFinite(startTs) ? new Date(startTs * 1000) : null
+  const subscriptionEnd =
+    typeof endTs === 'number' && Number.isFinite(endTs) ? new Date(endTs * 1000) : null
   const data: {
     subscriptionStatus: string
-    subscriptionStart: Date
-    subscriptionEnd: Date
     subscriptionPlan?: string
     billingCycle?: string
     planType?: string
     hasUsedTrial?: boolean
+    subscriptionStart?: Date | null
+    subscriptionEnd?: Date | null
   } = {
     subscriptionStatus: status,
-    subscriptionStart: new Date(subData.current_period_start * 1000),
-    subscriptionEnd: new Date(subData.current_period_end * 1000),
+    ...(subscriptionStart != null ? { subscriptionStart } : {}),
+    ...(subscriptionEnd != null ? { subscriptionEnd } : {}),
   }
   if (mapping && (status === 'active' || status === 'trialing')) {
     data.subscriptionPlan = mapping.plan

@@ -57,6 +57,12 @@ export async function syncUserFromStripeCheckout(userId: string, sessionId: stri
         ? checkoutSession.customer
         : (checkoutSession.customer as { id?: string } | null)?.id ?? null
     const hadTrial = subData.status === 'trialing' || (subData.trial_end != null && subData.trial_end > 0)
+    const startTs = subData.current_period_start
+    const endTs = subData.current_period_end
+    const subscriptionStart =
+      typeof startTs === 'number' && Number.isFinite(startTs) ? new Date(startTs * 1000) : null
+    const subscriptionEnd =
+      typeof endTs === 'number' && Number.isFinite(endTs) ? new Date(endTs * 1000) : null
 
     await prisma.user.update({
       where: { id: userId },
@@ -67,8 +73,8 @@ export async function syncUserFromStripeCheckout(userId: string, sessionId: stri
         subscriptionStatus,
         stripeCustomerId: customerId ?? undefined,
         stripeSubscriptionId: subId,
-        subscriptionStart: new Date(subData.current_period_start * 1000),
-        subscriptionEnd: new Date(subData.current_period_end * 1000),
+        ...(subscriptionStart != null ? { subscriptionStart } : {}),
+        ...(subscriptionEnd != null ? { subscriptionEnd } : {}),
         ...(hadTrial ? { hasUsedTrial: true } : {}),
       } as Parameters<typeof prisma.user.update>[0]['data'],
     })
