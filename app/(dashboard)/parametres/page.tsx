@@ -427,14 +427,15 @@ export default function ParametresPage() {
         {subscriptionPlan === 'business' && (
           <p className="text-sm text-[var(--muted)]">Toutes les fonctionnalités sont débloquées.</p>
         )}
-        {(subscriptionPlan === 'pro' || subscriptionPlan === 'business') && stripeSubscriptionId && (subscriptionStatus === 'active' || subscriptionStatus === 'trialing') && (
+        {(subscriptionPlan === 'pro' || subscriptionPlan === 'business') && (
           <div className="mt-4">
             <button
               type="button"
               onClick={async () => {
                 const isTrialing = subscriptionStatus === 'trialing'
-                const msg = isTrialing
-                  ? 'Résilier votre essai gratuit ? Vous repasserez sur la formule Starter immédiatement.'
+                const hasStripe = !!stripeSubscriptionId
+                const msg = !hasStripe || isTrialing
+                  ? 'Résilier votre abonnement ? Vous repasserez sur la formule Starter immédiatement.'
                   : 'Résilier votre abonnement ? Vous repasserez sur la formule Starter à la fin de la période déjà payée.'
                 if (!confirm(msg)) return
                 setCancelSubscriptionLoading(true)
@@ -442,10 +443,16 @@ export default function ParametresPage() {
                   const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' })
                   const data = await res.json()
                   if (data.ok) {
-                    setSubscriptionPlan('starter')
-                    setStripeSubscriptionId(null)
-                    setSubscriptionStatus('cancelled')
                     setMessage('Abonnement résilié. Vous gardez l’accès jusqu’à la fin de la période payée.')
+                    const meRes = await fetch('/api/me')
+                    const meData = await meRes.json().catch(() => ({}))
+                    const planVal = (meData.subscriptionPlan === 'pro' || meData.subscriptionPlan === 'business' ? meData.subscriptionPlan : 'starter') as 'starter' | 'pro' | 'business'
+                    setSubscriptionPlan(planVal)
+                    setStripeSubscriptionId(meData.stripeSubscriptionId ?? null)
+                    setSubscriptionStatus(meData.subscriptionStatus ?? null)
+                    setSubscriptionEnd(meData.subscriptionEnd != null ? (typeof meData.subscriptionEnd === 'string' ? meData.subscriptionEnd : new Date(meData.subscriptionEnd).toISOString()) : null)
+                    if (planVal === 'starter') lastSyncedPlanRef.current = 'starter'
+                    updateSession?.({ subscriptionPlan: planVal }).catch(() => {})
                   } else {
                     setMessage(data.error || 'Erreur')
                   }

@@ -62,17 +62,16 @@ export default function SettingsBillingPage() {
   }
 
   const handleCancelSubscription = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir annuler votre abonnement ? Vous repasserez sur la formule Starter à la fin de la période payée (ou à la fin de votre essai gratuit).')) return
+    if (!confirm('Êtes-vous sûr de vouloir résilier votre abonnement ? Vous repasserez sur la formule Starter (à la fin de la période payée si abonnement Stripe, ou immédiatement sinon).')) return
     setCancelling(true)
     try {
       const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' })
       const data = await res.json()
       if (data.ok) {
-        setBilling((b) => (b ? { ...b, subscriptionStatus: 'cancelled', subscriptionPlan: 'starter' } : null))
-        window.location.reload()
-      } else {
-        alert(data.error || 'Erreur')
+        window.location.href = '/parametres?resilie=1'
+        return
       }
+      alert(data.error || 'Erreur')
     } catch {
       alert('Erreur')
     } finally {
@@ -89,6 +88,7 @@ export default function SettingsBillingPage() {
   }
 
   const plan = billing?.subscriptionPlan ?? 'starter'
+  const isPaidPlan = plan === 'pro' || plan === 'business'
   const hasActiveStripeSubscription =
     (billing?.subscriptionStatus === 'active' && billing?.stripeSubscriptionId) ?? false
 
@@ -145,26 +145,26 @@ export default function SettingsBillingPage() {
             {changingPlan ? 'Redirection…' : 'Changer de plan'}
           </button>
           {hasActiveStripeSubscription && (
-            <>
-              <button
-                type="button"
-                onClick={handleOpenStripePortal}
-                disabled={!!portalLoading}
-                className="inline-flex items-center gap-2 justify-center px-4 py-2.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--border)]/20 font-medium text-sm disabled:opacity-50"
-              >
-                <ExternalLink className="w-4 h-4" />
-                {portalLoading ? 'Ouverture…' : 'Gérer mon abonnement (Stripe)'}
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelSubscription}
+            <button
+              type="button"
+              onClick={handleOpenStripePortal}
+              disabled={!!portalLoading}
+              className="inline-flex items-center gap-2 justify-center px-4 py-2.5 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--border)]/20 font-medium text-sm disabled:opacity-50"
+            >
+              <ExternalLink className="w-4 h-4" />
+              {portalLoading ? 'Ouverture…' : 'Gérer mon abonnement (Stripe)'}
+            </button>
+          )}
+          {isPaidPlan && (
+            <button
+              type="button"
+              onClick={handleCancelSubscription}
               disabled={!!cancelling}
               className="inline-flex items-center gap-2 justify-center px-4 py-2.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--border)]/20 font-medium text-sm disabled:opacity-50"
             >
               <XCircle className="w-4 h-4" />
-              {cancelling ? 'Annulation…' : 'Résilier à la fin de la période'}
+              {cancelling ? 'Annulation…' : 'Résilier l’abonnement'}
             </button>
-            </>
           )}
         </div>
         <p className="text-xs text-[var(--muted)] mt-3">

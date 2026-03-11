@@ -5,30 +5,51 @@ import { stripe } from '@/lib/stripe'
 
 export const dynamic = 'force-dynamic'
 
-/** Annule l’abonnement Stripe à la fin de la période (cancel_at_period_end). */
+/** Annule l’abonnement : Stripe (cancel_at_period_end) ou downgrade direct en base si pas de Stripe. */
 export async function POST() {
   const session = await requireSession()
   if (!session?.id) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-  if (!stripe) return NextResponse.json({ error: 'Stripe non configuré' }, { status: 503 })
 
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    select: { stripeSubscriptionId: true },
+    select: { stripeSubscriptionId: true, subscriptionPlan: true, subscriptionStatus: true },
   })
-  const subId = (user as { stripeSubscriptionId?: string | null })?.stripeSubscriptionId
-  if (!subId) {
-    return NextResponse.json({ error: 'Aucun abonnement actif' }, { status: 400 })
+  if (!user) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 })
+
+  const subId = (user as { stripeSubscriptionId?: string | null }).stripeSubscriptionId
+  const plan = (user as { subscriptionPlan?: string }).subscriptionPlan ?? 'starter'
+  const status = (user as { subscriptionStatus?: string | null }).subscriptionStatus ?? null
+  const hasPaidPlan = plan === 'pro' || plan === 'business'
+  const hasStripeSubscription = !!subId
+  const hasActiveOrTrialingStatus = status === 'active' || status === 'trialing'
+
+  if (subId && stripe) {
+    try {
+      await stripe.subscriptions.update(subId, { cancel_at_period_end: true })
+      await prisma.user.update({
+        where: { id: session.id },
+        data: { subscriptionStatus: 'cancelled' },
+      })
+      return NextResponse.json({ ok: true, message: 'Abonnement annulé à la fin de la période.' })
+    } catch (e) {
+      console.error('[Stripe cancel]', e)
+      return NextResponse.json({ error: 'Impossible d’annuler l’abonnement' }, { status: 500 })
+    }
   }
 
-  try {
-    await stripe.subscriptions.update(subId, { cancel_at_period_end: true })
+  if (hasPaidPlan || hasStripeSubscription || hasActiveOrTrialingStatus) {
     await prisma.user.update({
       where: { id: session.id },
-      data: { subscriptionStatus: 'cancelled' },
+      data: {
+        subscriptionPlan: 'starter',
+        subscriptionStatus: null,
+        stripeSubscriptionId: null,
+        subscriptionEnd: null,
+        planType: 'free',
+      },
     })
-    return NextResponse.json({ ok: true, message: 'Abonnement annulé à la fin de la période.' })
-  } catch (e) {
-    console.error('[Stripe cancel]', e)
-    return NextResponse.json({ error: 'Impossible d’annuler l’abonnement' }, { status: 500 })
+    return NextResponse.json({ ok: true, message: 'Abonnement résilié. Vous êtes repassé sur la formule Starter.' })
   }
+
+  return NextResponse.json({ error: 'Aucun abonnement actif' }, { status: 400 })
 }
