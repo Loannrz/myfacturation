@@ -108,9 +108,17 @@ export async function DELETE(
   if (!admin) return NextResponse.json({ error: 'Non autorisé' }, { status: 403 })
 
   const { id } = await params
-  const user = await prisma.user.findFirst({ where: { id, role: 'user' } })
+  const user = await prisma.user.findFirst({ where: { id, role: 'user' }, select: { email: true } })
   if (!user) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 })
 
+  const email = user.email?.trim().toLowerCase()
+  if (email) {
+    await prisma.deletedEmail.upsert({
+      where: { email },
+      create: { email },
+      update: { deletedAt: new Date() },
+    })
+  }
   await prisma.user.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }

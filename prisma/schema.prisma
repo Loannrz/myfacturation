@@ -382,6 +382,14 @@ model EmailLog {
   @@index([createdAt])
 }
 
+// Emails de comptes supprimés par l'admin : empêche de réinscrire avec le même email
+model DeletedEmail {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  deletedAt DateTime @default(now())
+  @@index([email])
+}
+
 model BillingSettings {
   id                    String   @id @default(cuid())
   userId                String   @unique

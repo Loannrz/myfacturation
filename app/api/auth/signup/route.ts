@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ error: 'Cet email est déjà utilisé (connexion Google)' }, { status: 409 })
     }
+    const deleted = await prisma.deletedEmail.findUnique({ where: { email } })
+    if (deleted) {
+      return NextResponse.json({ error: 'Cet email a été supprimé et ne peut pas être réutilisé pour créer un compte.' }, { status: 409 })
+    }
 
     const hash = await bcrypt.hash(password, 12)
     const code = generateCode()
