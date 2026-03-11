@@ -26,10 +26,8 @@ export async function POST() {
   if (subId && stripe) {
     try {
       await stripe.subscriptions.update(subId, { cancel_at_period_end: true })
-      await prisma.user.update({
-        where: { id: session.id },
-        data: { subscriptionStatus: 'cancelled' },
-      })
+      // Ne pas modifier subscriptionPlan ni subscriptionStatus : l'utilisateur garde ses avantages jusqu'à subscriptionEnd.
+      // Le webhook customer.subscription.deleted mettra à jour la BDD quand la période sera terminée.
       return NextResponse.json({ ok: true, message: 'Abonnement annulé à la fin de la période.' })
     } catch (e) {
       console.error('[Stripe cancel]', e)
