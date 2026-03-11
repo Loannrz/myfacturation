@@ -1,13 +1,29 @@
 import Link from 'next/link'
 import { ThemeToggle } from './theme-toggle'
+import {
+  Check,
+  FileText,
+  Download,
+  Users,
+  BarChart3,
+  History,
+  Sparkles,
+  Zap,
+  Shield,
+  FolderOpen,
+  LayoutGrid,
+  UserPlus,
+  FileCheck,
+} from 'lucide-react'
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col">
-      <header className="border-b border-[var(--border)]">
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/95 backdrop-blur">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <span className="text-xl font-semibold tracking-tight">Myfacturation</span>
-          <nav className="flex items-center gap-4">
+          <nav className="flex items-center gap-3">
             <ThemeToggle />
             <Link
               href="/login"
@@ -17,7 +33,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/signup"
-              className="text-sm bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+              className="text-sm bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg hover:opacity-90 transition-opacity font-medium"
             >
               Créer un compte
             </Link>
@@ -25,63 +41,303 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-20">
-        <section className="max-w-2xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight mb-6">
-            La facturation simple pour les indépendants et entreprises
-          </h1>
-          <p className="text-lg text-[var(--muted)] mb-10">
-            Créez devis et factures en quelques secondes.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+      <main className="flex-1">
+        {/* Section 1 — Hero */}
+        <section className="max-w-6xl mx-auto px-4 pt-16 pb-20 md:pt-24 md:pb-28">
+          <div className="text-center max-w-3xl mx-auto">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight mb-6 leading-tight">
+              La facturation simple et professionnelle pour les indépendants
+            </h1>
+            <p className="text-lg md:text-xl text-[var(--muted)] mb-10 leading-relaxed">
+              Créez devis, factures et suivez vos revenus en quelques secondes.
+              <br className="hidden sm:block" />
+              Gagnez du temps et gardez une vision claire de votre activité.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
+              <Link
+                href="/signup"
+                className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 rounded-xl bg-[var(--foreground)] text-[var(--background)] font-semibold hover:opacity-90 transition-opacity text-base"
+              >
+                Créer un compte gratuitement
+              </Link>
+              <a
+                href="#demo"
+                className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 rounded-xl border-2 border-[var(--border)] font-semibold hover:bg-[var(--border)]/20 transition-colors text-base"
+              >
+                Voir une démo
+              </a>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-[var(--muted)]">
+              <span className="inline-flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                Essai gratuit 7 jours
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                Aucune carte requise
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                Configuration en moins de 2 minutes
+              </span>
+            </div>
+          </div>
+          {/* Dashboard mockup */}
+          <div id="demo" className="mt-16 md:mt-24 rounded-2xl border border-[var(--border)] bg-[var(--border)]/10 overflow-hidden shadow-2xl max-w-5xl mx-auto">
+            <div className="h-10 flex items-center gap-2 px-4 border-b border-[var(--border)] bg-[var(--background)]/80">
+              <span className="w-3 h-3 rounded-full bg-[var(--muted)]/50" />
+              <span className="w-3 h-3 rounded-full bg-[var(--muted)]/50" />
+              <span className="w-3 h-3 rounded-full bg-[var(--muted)]/50" />
+            </div>
+            <div className="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-8 space-y-4">
+                <h3 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider">Factures récentes</h3>
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--background)]/60 divide-y divide-[var(--border)]">
+                  {['FAC-2024-012', 'FAC-2024-011', 'FAC-2024-010'].map((n, i) => (
+                    <div key={n} className="flex items-center justify-between px-4 py-3">
+                      <span className="font-mono text-sm">{n}</span>
+                      <span className="text-sm text-[var(--muted)]">{['1 200 €', '890 €', '2 100 €'][i]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="lg:col-span-4 space-y-4">
+                <h3 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider">Statistiques</h3>
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--background)]/60 p-4 space-y-3">
+                  <div>
+                    <p className="text-xs text-[var(--muted)]">Chiffre d&apos;affaires ce mois</p>
+                    <p className="text-xl font-semibold">4 190 €</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[var(--muted)]">Factures envoyées</p>
+                    <p className="text-xl font-semibold">12</p>
+                  </div>
+                </div>
+                <h3 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider">Clients</h3>
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--background)]/60 p-4">
+                  <p className="text-2xl font-semibold">24</p>
+                  <p className="text-xs text-[var(--muted)]">clients enregistrés</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 2 — Problème utilisateur */}
+        <section className="border-y border-[var(--border)] bg-[var(--border)]/5 py-16 md:py-24">
+          <div className="max-w-4xl mx-auto px-4 text-center">
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-6">
+              La facturation ne devrait pas être compliquée
+            </h2>
+            <p className="text-[var(--muted)] mb-10 text-lg">
+              Les indépendants passent souvent trop de temps à :
+            </p>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left max-w-2xl mx-auto mb-10">
+              {[
+                'Créer leurs devis manuellement',
+                'Gérer leurs clients dans plusieurs outils',
+                'Suivre leurs paiements',
+                'Organiser leurs factures',
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-2 text-[var(--muted)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--muted)] shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <p className="text-lg font-medium">
+              Myfacturation centralise tout dans un seul outil simple.
+            </p>
+          </div>
+        </section>
+
+        {/* Section 3 — Fonctionnalités */}
+        <section className="py-16 md:py-24">
+          <div className="max-w-6xl mx-auto px-4">
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-center mb-12">
+              Fonctionnalités principales
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[
+                { icon: FileText, title: 'Création de devis et factures', desc: 'Créez des documents professionnels en quelques secondes.' },
+                { icon: Download, title: 'Génération PDF automatique', desc: 'Téléchargez et envoyez vos factures instantanément.' },
+                { icon: Users, title: 'Gestion des clients', desc: 'Centralisez toutes les informations de vos clients.' },
+                { icon: BarChart3, title: 'Tableau de bord clair', desc: 'Suivez votre chiffre d\'affaires et votre activité.' },
+                { icon: History, title: 'Historique des documents', desc: 'Retrouvez tous vos devis et factures.' },
+                { icon: Sparkles, title: 'Interface simple', desc: 'Aucune compétence comptable nécessaire.' },
+              ].map(({ icon: Icon, title, desc }) => (
+                <div
+                  key={title}
+                  className="p-6 rounded-2xl border border-[var(--border)] bg-[var(--background)] hover:border-[var(--foreground)]/20 transition-colors"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-[var(--border)]/30 flex items-center justify-center mb-4 text-[var(--foreground)]">
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">{title}</h3>
+                  <p className="text-[var(--muted)] text-sm leading-relaxed">{desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Section 4 — Comment ça marche */}
+        <section className="border-y border-[var(--border)] bg-[var(--border)]/5 py-16 md:py-24">
+          <div className="max-w-4xl mx-auto px-4">
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-center mb-14">
+              Comment ça marche
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+              {[
+                { step: '1', icon: UserPlus, title: 'Créez votre compte', desc: 'Inscription rapide.' },
+                { step: '2', icon: Users, title: 'Ajoutez vos clients', desc: 'Enregistrez leurs informations.' },
+                { step: '3', icon: FileCheck, title: 'Générez vos factures', desc: 'Créez et envoyez vos documents en quelques secondes.' },
+              ].map(({ step, icon: Icon, title, desc }) => (
+                <div key={step} className="text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-[var(--foreground)] text-[var(--background)] flex items-center justify-center mx-auto mb-4 font-bold text-xl">
+                    {step}
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-[var(--border)]/30 flex items-center justify-center mx-auto mb-3 text-[var(--foreground)]">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">{title}</h3>
+                  <p className="text-[var(--muted)] text-sm">{desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Section 5 — Pour qui */}
+        <section className="py-16 md:py-24">
+          <div className="max-w-4xl mx-auto px-4 text-center">
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-6">
+              Pour qui est cet outil
+            </h2>
+            <p className="text-lg text-[var(--muted)] mb-10">
+              Myfacturation est conçu pour les professionnels qui veulent gérer leur facturation rapidement sans complexité.
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              {['Freelances', 'Auto-entrepreneurs', 'Consultants', 'Agences', 'Petites entreprises'].map((label) => (
+                <span
+                  key={label}
+                  className="px-5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm font-medium"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Section 6 — Avantages */}
+        <section className="border-y border-[var(--border)] bg-[var(--border)]/5 py-16 md:py-24">
+          <div className="max-w-4xl mx-auto px-4">
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-center mb-12">
+              Vos avantages
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[
+                { icon: Zap, text: 'Gagnez du temps' },
+                { icon: Shield, text: 'Évitez les erreurs' },
+                { icon: BarChart3, text: 'Suivez votre activité' },
+                { icon: FolderOpen, text: 'Centralisez vos documents' },
+                { icon: LayoutGrid, text: 'Améliorez votre organisation' },
+              ].map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-center gap-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+                  <Icon className="w-5 h-5 text-[var(--foreground)] shrink-0" />
+                  <span className="font-medium">{text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Section 7 — Prix */}
+        <section className="py-16 md:py-24">
+          <div className="max-w-4xl mx-auto px-4">
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-center mb-12">
+              Tarifs simples
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+              <div className="p-8 rounded-2xl border-2 border-[var(--border)] bg-[var(--background)]">
+                <h3 className="text-xl font-semibold mb-2">Plan Pro</h3>
+                <p className="text-[var(--muted)] text-sm mb-6">Pour les indépendants</p>
+                <ul className="space-y-2 text-sm text-[var(--muted)] mb-8">
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500 shrink-0" /> Essai gratuit 7 jours</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500 shrink-0" /> Paiement mensuel</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500 shrink-0" /> Annulable à tout moment</li>
+                </ul>
+                <Link
+                  href="/formules"
+                  className="block w-full text-center py-3 rounded-xl border-2 border-[var(--foreground)] font-medium hover:bg-[var(--foreground)]/10 transition-colors"
+                >
+                  Voir les formules
+                </Link>
+              </div>
+              <div className="p-8 rounded-2xl border-2 border-[var(--foreground)] bg-[var(--background)]">
+                <h3 className="text-xl font-semibold mb-2">Plan Business</h3>
+                <p className="text-[var(--muted)] text-sm mb-6">Pour les entreprises avec plus de besoins</p>
+                <ul className="space-y-2 text-sm text-[var(--muted)] mb-8">
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500 shrink-0" /> Essai gratuit 7 jours</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500 shrink-0" /> Paiement mensuel</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500 shrink-0" /> Annulable à tout moment</li>
+                </ul>
+                <Link
+                  href="/formules"
+                  className="block w-full text-center py-3 rounded-xl bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90 transition-opacity"
+                >
+                  Voir les formules
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 8 — CTA final */}
+        <section className="border-y border-[var(--border)] bg-[var(--border)]/5 py-20 md:py-28">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-6">
+              Prêt à simplifier votre facturation ?
+            </h2>
+            <p className="text-[var(--muted)] mb-10 text-lg">
+              Rejoignez les professionnels qui font confiance à Myfacturation.
+            </p>
             <Link
               href="/signup"
-              className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90 transition-opacity"
+              className="inline-flex items-center justify-center px-10 py-4 rounded-xl bg-[var(--foreground)] text-[var(--background)] font-semibold hover:opacity-90 transition-opacity text-lg"
             >
-              Créer un compte
-            </Link>
-            <Link
-              href="/login"
-              className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 rounded-lg border border-[var(--border)] font-medium hover:bg-[var(--border)]/20 transition-colors"
-            >
-              Se connecter
+              Créer un compte gratuitement
             </Link>
           </div>
         </section>
 
-        <section className="max-w-4xl mx-auto mt-24 grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-          <div className="p-6">
-            <div className="w-10 h-10 rounded-lg bg-[var(--border)]/30 flex items-center justify-center mx-auto mb-4 text-[var(--muted)]">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.5L14 7" />
-              </svg>
+        {/* Section 9 — Footer */}
+        <footer className="py-12 md:py-16 border-t border-[var(--border)]">
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+              <div>
+                <span className="text-lg font-semibold tracking-tight">Myfacturation</span>
+                <p className="text-sm text-[var(--muted)] mt-1">La facturation simple pour les indépendants.</p>
+              </div>
+              <nav className="flex flex-wrap gap-6 text-sm">
+                <Link href="/contact" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+                  Contact
+                </Link>
+                <Link href="/support" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+                  Support
+                </Link>
+                <Link href="/confidentialite" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+                  Politique de confidentialité
+                </Link>
+                <Link href="/conditions" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+                  Conditions d&apos;utilisation
+                </Link>
+              </nav>
             </div>
-            <h3 className="font-medium mb-2">Devis & factures</h3>
-            <p className="text-sm text-[var(--muted)]">Générez des documents PDF professionnels en quelques clics.</p>
-          </div>
-          <div className="p-6">
-            <div className="w-10 h-10 rounded-lg bg-[var(--border)]/30 flex items-center justify-center mx-auto mb-4 text-[var(--muted)]">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
+            <div className="mt-10 pt-8 border-t border-[var(--border)] text-center text-sm text-[var(--muted)]">
+              © {new Date().getFullYear()} Myfacturation. Tous droits réservés.
             </div>
-            <h3 className="font-medium mb-2">Clients</h3>
-            <p className="text-sm text-[var(--muted)]">Centralisez vos clients et sociétés.</p>
-          </div>
-          <div className="p-6">
-            <div className="w-10 h-10 rounded-lg bg-[var(--border)]/30 flex items-center justify-center mx-auto mb-4 text-[var(--muted)]">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <h3 className="font-medium mb-2">Tableau de bord</h3>
-            <p className="text-sm text-[var(--muted)]">Suivez votre activité et vos revenus.</p>
-          </div>
-        </section>
-
-        <footer className="mt-24 py-8 border-t border-[var(--border)] w-full">
-          <div className="max-w-6xl mx-auto px-4 text-center text-sm text-[var(--muted)]">
-            © {new Date().getFullYear()} Myfacturation. Tous droits réservés.
           </div>
         </footer>
       </main>
