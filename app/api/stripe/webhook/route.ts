@@ -34,6 +34,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'webhook/route.ts:event',message:'webhook event',data:{type:event.type},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
@@ -69,9 +72,11 @@ export async function POST(req: NextRequest) {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const userId = session.metadata?.userId
-  if (!userId) return
-
   const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
+  // #region agent log
+  fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'42c834'},body:JSON.stringify({sessionId:'42c834',location:'webhook:handleCheckoutCompleted',message:'checkout completed',data:{hasUserId:!!userId,hasSubscriptionId:!!subscriptionId},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
+  // #endregion
+  if (!userId) return
   if (!subscriptionId) return
 
   const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items.data.price'] })
