@@ -34,7 +34,14 @@ export async function GET(req: NextRequest) {
     limit: 100,
   })
 
-  const subscriptionIds = [...new Set(invoices.data.map((i) => (typeof i.subscription === 'string' ? i.subscription : i.subscription?.id)).filter(Boolean))] as string[]
+  type InvWithSub = (typeof invoices.data)[number] & { subscription?: string | { id?: string } | null }
+  const subscriptionIds = Array.from(
+    new Set(
+      invoices.data
+        .map((i: InvWithSub) => (typeof i.subscription === 'string' ? i.subscription : i.subscription?.id))
+        .filter(Boolean)
+    )
+  ) as string[]
   if (subscriptionIds.length === 0) {
     return NextResponse.json({ error: 'Aucune facture pour ce mois' }, { status: 404 })
   }
@@ -49,7 +56,7 @@ export async function GET(req: NextRequest) {
   }
 
   const items = invoices.data
-    .map((inv) => {
+    .map((inv: InvWithSub) => {
       const subId = typeof inv.subscription === 'string' ? inv.subscription : inv.subscription?.id
       const user = subId ? userBySubId[subId] : null
       return user ? { invoice: inv, user } : null
@@ -114,7 +121,7 @@ export async function GET(req: NextRequest) {
   })
 
   const zipFilename = `factures-abonnements-${month}.zip`
-  return new NextResponse(zipBuffer, {
+  return new NextResponse(new Uint8Array(zipBuffer), {
     headers: {
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="${zipFilename}"`,

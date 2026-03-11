@@ -120,13 +120,13 @@ export async function generateSubscriptionInvoicePDF(
 
   // Bloc Client
   const clientY = y
-  page.drawText('Client', { x: MARGIN + CONTENT_W / 2 + 12, clientY, size: 8, font: fontBold, color: secondary })
+  page.drawText('Client', { x: MARGIN + CONTENT_W / 2 + 12, y: clientY, size: 8, font: fontBold, color: secondary })
   let yClient = clientY - 14
   if (data.customerName) {
-    page.drawText(sanitize(data.customerName), { x: MARGIN + CONTENT_W / 2 + 12, yClient, size: 10, font: fontBold, color: primary })
+    page.drawText(sanitize(data.customerName), { x: MARGIN + CONTENT_W / 2 + 12, y: yClient, size: 10, font: fontBold, color: primary })
     yClient -= 12
   }
-  page.drawText(sanitize(data.customerEmail), { x: MARGIN + CONTENT_W / 2 + 12, yClient, size: 9, font, color: secondary })
+  page.drawText(sanitize(data.customerEmail), { x: MARGIN + CONTENT_W / 2 + 12, y: yClient, size: 9, font, color: secondary })
   y = Math.min(y, yClient - 24)
 
   // Ligne horizontale
@@ -135,8 +135,8 @@ export async function generateSubscriptionInvoicePDF(
 
   // Tableau : Désignation / Montant
   const tableY = y
-  page.drawText('Désignation', { x: MARGIN, tableY, size: 9, font: fontBold, color: primary })
-  page.drawText('Montant TTC', { x: PAGE_W - MARGIN - 90, tableY, size: 9, font: fontBold, color: primary })
+  page.drawText('Désignation', { x: MARGIN, y: tableY, size: 9, font: fontBold, color: primary })
+  page.drawText('Montant TTC', { x: PAGE_W - MARGIN - 90, y: tableY, size: 9, font: fontBold, color: primary })
   y -= 14
   page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_W - MARGIN, y }, thickness: 0.5, color: border })
   y -= 18

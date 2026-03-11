@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import Stripe from 'stripe'
 import { requireAdmin } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
@@ -21,14 +22,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Paramètre invoiceId requis (ex. in_xxx)' }, { status: 400 })
   }
 
-  let invoice: Awaited<ReturnType<typeof stripe.invoices.retrieve>>
+  let invoice: Stripe.Invoice
   try {
-    invoice = await stripe.invoices.retrieve(invoiceId)
+    const raw = await stripe.invoices.retrieve(invoiceId)
+    if (raw.deleted) {
+      return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
+    }
+    invoice = raw
   } catch {
     return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
   }
 
-  const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id
+  type InvoiceWithSub = Stripe.Invoice & { subscription?: string | { id?: string } | null }
+  const sub = (invoice as InvoiceWithSub).subscription
+  const subscriptionId = typeof sub === 'string' ? sub : sub?.id
   if (!subscriptionId) {
     return NextResponse.json({ error: 'Facture sans abonnement' }, { status: 400 })
   }
