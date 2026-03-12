@@ -8,6 +8,7 @@ export default withAuth({
 })
 
 export const config = {
+  // Ne pas exécuter le middleware sur les assets statiques (_next, api, etc.)
   matcher: [
     '/dashboard/:path*',
     '/factures/:path*',
@@ -18,6 +19,9 @@ export const config = {
     '/creer/:path*',
     '/activite/:path*',
     '/comptabilite/:path*',
+    '/depenses/:path*',
     '/parametres/:path*',
+    '/messages/:path*',
+    '/settings/:path*',
   ],
 }
