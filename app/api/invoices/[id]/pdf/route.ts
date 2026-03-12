@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getBillingSettings } from '@/lib/billing-settings'
 import { generateInvoicePDF } from '@/lib/billing-pdf'
 import { loadPdfLib } from '@/lib/load-pdf-lib'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
   const invoice = await prisma.invoice.findFirst({
-    where: { id, userId: session.id },
+    where: { id, userId: session.id, ...whereNotDeleted },
     include: { client: true, company: true, lines: true, quote: true },
   })
   if (!invoice) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })

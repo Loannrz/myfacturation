@@ -6,6 +6,7 @@ import { generateInvoicePDF } from '@/lib/billing-pdf'
 import { loadPdfLib } from '@/lib/load-pdf-lib'
 import { sendMail } from '@/lib/smtp'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 import { buildBillingEmailHtml } from '@/lib/billing-email-template'
 
 export const dynamic = 'force-dynamic'
@@ -37,7 +38,7 @@ export async function POST(
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
   const invoice = await prisma.invoice.findFirst({
-    where: { id, userId: session.id },
+    where: { id, userId: session.id, ...whereNotDeleted },
     include: { client: true, company: true, lines: true },
   })
   if (!invoice) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })

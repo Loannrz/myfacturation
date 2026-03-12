@@ -20,11 +20,12 @@ export async function GET(
 
   const { id } = await params
   const user = await prisma.user.findFirst({
-    where: { id, role: 'user' },
+    where: { id },
     select: {
       id: true,
       name: true,
       email: true,
+      role: true,
       phone: true,
       subscriptionPlan: true,
       billingCycle: true,

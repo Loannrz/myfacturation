@@ -150,7 +150,8 @@ export const authOptions: NextAuthOptions = {
         token.emailVerified = !!(user as { emailVerified?: boolean }).emailVerified
         token.role = (user as { role?: string }).role ?? 'user'
       }
-      if (token.id && (token.subscriptionPlan == null || token.subscriptionPlan === undefined || token.role == null)) {
+      // Toujours resynchroniser rôle et abo depuis la DB pour que les changements (ex. seed admin) soient pris en compte sans déconnexion
+      if (token.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
           select: { subscriptionPlan: true, billingCycle: true, planType: true, role: true, suspended: true },

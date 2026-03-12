@@ -18,7 +18,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var t=localStorage.getItem('myfacturation360-theme');document.documentElement.classList.add(t==='light'?'light':'dark');})();`,
+            __html: `(function(){var t=localStorage.getItem('myfacturation360-theme');document.documentElement.classList.add(t==='dark'?'dark':'light');})();`,
           }}
         />
       </head>

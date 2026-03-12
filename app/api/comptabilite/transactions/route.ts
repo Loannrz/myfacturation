@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
       if (to) where.issueDate.lte = to.slice(0, 10)
     }
     const invoices = await prisma.invoice.findMany({
-      where: { ...where, status: { not: 'cancelled' } },
+      where: { ...where, ...whereNotDeleted, status: { not: 'cancelled' } },
       include: { client: true, company: true },
       orderBy: { issueDate: 'desc' },
     })
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
       if (to) where.date.lte = to.slice(0, 10)
     }
     const expenses = await prisma.expense.findMany({
-      where,
+      where: { ...where, ...whereNotDeleted },
       orderBy: { date: 'desc' },
     })
     expenses.forEach((e) => {
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
       if (to) where.issueDate.lte = to.slice(0, 10)
     }
     const creditNotes = await prisma.creditNote.findMany({
-      where,
+      where: { ...where, ...whereNotDeleted },
       include: { client: true, company: true },
       orderBy: { issueDate: 'desc' },
     })

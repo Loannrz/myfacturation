@@ -17,6 +17,8 @@ export const PLAN_FEATURES = {
   creditNotes: { starter: false, pro: true, business: true },
   expenses: { starter: false, pro: true, business: true },
   accounting: { starter: false, pro: true, business: true },
+  /** Gestion des salariés (liste, création, dépenses liées) */
+  employees: { starter: false, pro: false, business: true },
   /** Numérotation factures/devis/avoirs, paiement par défaut, mentions légales */
   advancedSettings: { starter: false, pro: true, business: true },
   exportsCsvExcel: { starter: false, pro: false, business: true },

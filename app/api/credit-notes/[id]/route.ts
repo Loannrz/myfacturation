@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 import { getBillingSettings, parseBankAccounts } from '@/lib/billing-settings'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +16,7 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
   const creditNote = await prisma.creditNote.findFirst({
-    where: { id, userId: session.id },
+    where: { id, userId: session.id, ...whereNotDeleted },
     include: { client: true, company: true, invoice: true, lines: true },
   })
   if (!creditNote) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
@@ -29,7 +30,7 @@ export async function PUT(
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
-  const existing = await prisma.creditNote.findFirst({ where: { id, userId: session.id } })
+  const existing = await prisma.creditNote.findFirst({ where: { id, userId: session.id, ...whereNotDeleted } })
   if (!existing) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
 
   const body = await req.json()
@@ -112,10 +113,10 @@ export async function DELETE(
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
-  const existing = await prisma.creditNote.findFirst({ where: { id, userId: session.id } })
+  const existing = await prisma.creditNote.findFirst({ where: { id, userId: session.id, ...whereNotDeleted } })
   if (!existing) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
-  await prisma.creditNote.delete({ where: { id } })
-  await logBillingActivity(session.id, 'credit_note deleted', 'credit_note', id)
+  await prisma.creditNote.update({ where: { id }, data: { deletedAt: new Date() } })
+  await logBillingActivity(session.id, 'credit_note deleted', 'credit_note', id, { number: existing.number })
   return NextResponse.json({ ok: true })
 }
 
@@ -126,7 +127,7 @@ export async function PATCH(
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
-  const existing = await prisma.creditNote.findFirst({ where: { id, userId: session.id } })
+  const existing = await prisma.creditNote.findFirst({ where: { id, userId: session.id, ...whereNotDeleted } })
   if (!existing) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
   const body = await req.json()
   const newStatus = body.status as string

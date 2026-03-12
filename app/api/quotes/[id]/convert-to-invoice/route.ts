@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { whereNotDeleted } from '@/lib/soft-delete'
 import { getNextInvoiceNumber } from '@/lib/billing-settings'
 import { logBillingActivity } from '@/lib/billing-activity'
 
@@ -23,7 +24,7 @@ export async function POST(
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id: quoteId } = await params
   const quote = await prisma.quote.findFirst({
-    where: { id: quoteId, userId: session.id },
+    where: { id: quoteId, userId: session.id, ...whereNotDeleted },
     include: { client: true, company: true, lines: true },
   })
   if (!quote) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 })

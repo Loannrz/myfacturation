@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,7 @@ export async function POST(
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
-  const existing = await prisma.invoice.findFirst({ where: { id, userId: session.id } })
+  const existing = await prisma.invoice.findFirst({ where: { id, userId: session.id, ...whereNotDeleted } })
   if (!existing) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
   let paymentDate: Date = new Date()
   let paymentMethod: string | null = null

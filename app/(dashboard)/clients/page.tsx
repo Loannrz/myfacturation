@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
+import { Search, Pencil, Trash2 } from 'lucide-react'
 
 type Client = {
   id: string
@@ -58,18 +58,13 @@ export default function ClientsPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
+      <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
-        <p className="text-[var(--muted)] text-sm mt-1">Vos clients et sociétés</p>
-        </div>
-        <Link
-          href="/clients/nouveau"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90 transition-opacity"
-        >
-          <Plus className="w-4 h-4" />
-          Nouveau client
-        </Link>
+        <p className="text-[var(--muted)] text-sm mt-1">
+          Liste de vos clients et sociétés. Pour en ajouter un, utilisez la catégorie &laquo;&nbsp;Créer&nbsp;&raquo; dans le menu.
+          {' '}
+          <Link href="/creer" className="text-[var(--foreground)] font-medium hover:underline">Créer →</Link>
+        </p>
       </div>
 
       <div className="mb-4">

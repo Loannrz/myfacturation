@@ -22,6 +22,7 @@ const COMPARISON = [
   { feature: 'Gestion clients', starter: true, pro: true, business: true },
   { feature: 'Avoirs', starter: false, pro: true, business: true },
   { feature: 'Gestion des dépenses', starter: false, pro: true, business: true },
+  { feature: 'Gestion des salariés', starter: false, pro: false, business: true },
   { feature: 'Dashboard', starter: true, pro: true, business: true },
   { feature: 'Numérotation + Paiement + Mentions légales', starter: false, pro: true, business: true },
   { feature: 'Comptabilité avancée', starter: false, pro: true, business: true },

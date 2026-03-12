@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBillingSettings, getNextCreditNoteNumber, parseBankAccounts } from '@/lib/billing-settings'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
 
@@ -14,9 +15,20 @@ export async function GET(req: NextRequest) {
 
   const q = (req.nextUrl.searchParams.get('q') ?? '').trim()
   const status = req.nextUrl.searchParams.get('status') ?? undefined
-  const where: { userId: string; number?: { contains: string }; status?: string } = { userId: session.id }
-  if (q) where.number = { contains: q }
+  const where: { userId: string; deletedAt?: null; number?: { contains: string }; status?: string; OR?: Array<Record<string, unknown>> } = { userId: session.id, ...whereNotDeleted }
   if (status) where.status = status
+  if (q) {
+    const orConditions: Array<Record<string, unknown>> = [
+      { number: { contains: q, mode: 'insensitive' } },
+      { client: { OR: [{ firstName: { contains: q, mode: 'insensitive' } }, { lastName: { contains: q, mode: 'insensitive' } }, { companyName: { contains: q, mode: 'insensitive' } }] } },
+      { lines: { some: { description: { contains: q, mode: 'insensitive' } } } },
+    ]
+    const amount = parseFloat(q.replace(',', '.'))
+    if (!Number.isNaN(amount) && isFinite(amount)) {
+      orConditions.push({ totalHT: { gte: amount - 0.01, lte: amount + 0.01 } }, { totalTTC: { gte: amount - 0.01, lte: amount + 0.01 } })
+    }
+    where.OR = orConditions
+  }
 
   const creditNotes = await prisma.creditNote.findMany({
     where,
@@ -46,7 +58,7 @@ export async function POST(req: NextRequest) {
     }
     if (body.invoiceId) {
       const invoice = await prisma.invoice.findFirst({
-        where: { id: body.invoiceId, userId: session.id },
+        where: { id: body.invoiceId, userId: session.id, ...whereNotDeleted },
       })
       if (!invoice) {
         return NextResponse.json({ error: 'Facture introuvable ou non autorisée' }, { status: 400 })

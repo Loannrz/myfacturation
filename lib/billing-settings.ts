@@ -125,6 +125,10 @@ export async function getBillingSettings(userId: string) {
     where: { userId },
   })
   if (!settings) {
+    const userExists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+    if (!userExists) {
+      throw new Error('USER_NOT_FOUND')
+    }
     settings = await prisma.billingSettings.create({
       data: {
         userId,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const q = searchParams.get('q') ?? ''
   const type = searchParams.get('type') ?? undefined
-  const where: { userId: string; type?: string; OR?: { firstName?: { contains: string }; lastName?: { contains: string }; email?: { contains: string }; companyName?: { contains: string } }[] } = { userId: session.id }
+  const where: { userId: string; type?: string; deletedAt?: null; OR?: { firstName?: { contains: string }; lastName?: { contains: string }; email?: { contains: string }; companyName?: { contains: string } }[] } = { userId: session.id, ...whereNotDeleted }
   if (type) where.type = type
   if (q.trim()) {
     where.OR = [

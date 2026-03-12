@@ -64,11 +64,11 @@ export default function HomePage() {
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-[var(--muted)]">
               <span className="inline-flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                Essai gratuit 7 jours
+                Facturez dès maintenant gratuitement
               </span>
               <span className="inline-flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                Aucune carte requise
+                Gratuit pour commencer
               </span>
               <span className="inline-flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />

@@ -17,11 +17,14 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { UpgradeGate } from '../components/UpgradeGate'
+import { CreateExpenseModal } from '../components/CreateExpenseModal'
 import {
   AreaChart,
   Area,
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -29,14 +32,6 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts'
-const EXPENSE_CATEGORIES = [
-  { value: 'Transport', label: 'Transport' },
-  { value: 'Matériel', label: 'Matériel' },
-  { value: 'Logiciel', label: 'Logiciel' },
-  { value: 'Marketing', label: 'Marketing' },
-  { value: 'Autre', label: 'Autre' },
-] as const
-
 type Expense = {
   id: string
   date: string
@@ -47,6 +42,10 @@ type Expense = {
   invoiceFile: string | null
   companyId: string | null
   company: { id: string; name: string } | null
+  clientId: string | null
+  client: { id: string; firstName: string; lastName: string; companyName: string | null } | null
+  employeeId: string | null
+  employee: { id: string; firstName: string; lastName: string } | null
   bankAccountId: string | null
 }
 
@@ -221,6 +220,43 @@ function AnalyticsCountTooltip({
   )
 }
 
+/** Tooltip graphique Dépenses par catégorie — détail par catégorie pour le mois */
+function ExpensesByCategoryTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ name: string; value: number; color: string; payload?: Record<string, unknown> }>
+  label?: string
+}) {
+  if (!active || !payload?.length || !label) return null
+  const raw = payload[0]?.payload as Record<string, unknown> | undefined
+  if (!raw || typeof raw !== 'object') return null
+  const point = raw as Record<string, string | number>
+  const categories = Object.keys(point).filter((k) => k !== 'month' && k !== 'label')
+  const total = categories.reduce((s, k) => s + (Number(point[k]) || 0), 0)
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-lg px-4 py-3 text-sm min-w-[220px]">
+      <p className="font-medium text-[var(--foreground)] border-b border-[var(--border)]/50 pb-1.5 mb-2">{label}</p>
+      <div className="space-y-1 max-h-[240px] overflow-y-auto">
+        {categories
+          .filter((k) => Number(point[k]) > 0)
+          .sort((a, b) => (Number(point[b]) || 0) - (Number(point[a]) || 0))
+          .map((k) => (
+            <p key={k} className="text-[var(--muted)] flex justify-between gap-4">
+              <span>{k}</span>
+              <span className="font-medium text-[var(--foreground)]">{formatEuro(Number(point[k]) || 0)}</span>
+            </p>
+          ))}
+      </div>
+      <p className="text-[var(--muted)] pt-1.5 border-t border-[var(--border)]/50 mt-1.5 font-medium">
+        Total : <span className="text-[var(--foreground)]">{formatEuro(total)}</span>
+      </p>
+    </div>
+  )
+}
+
 /** Tooltip CA client — détail Revenus (factures payées), Avoirs, Total net */
 type RevenueDetailPoint = { month: string; label: string; paidAmount: number; creditNotesAmount: number; total: number }
 function AnalyticsRevenueTooltip({
@@ -267,11 +303,13 @@ export default function ComptabilitePage() {
     revenueByYear: { year: number; revenue: number }[]
     expensesByMonth: { month: string; label: string; amount: number }[]
     creditNotesByMonth?: { month: string; amount: number }[]
+    expensesByCategoryByMonth?: { month: string; label: string; [category: string]: string | number }[]
   } | null>(null)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [clients, setClients] = useState<{ id: string; firstName: string; lastName: string; companyName: string | null }[]>([])
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [employees, setEmployees] = useState<{ id: string; firstName: string; lastName: string }[]>([])
   const [bankAccounts, setBankAccounts] = useState<BankAccountEntry[]>([])
   const [filterBankAccountId, setFilterBankAccountId] = useState('')
 
@@ -288,17 +326,6 @@ export default function ComptabilitePage() {
 
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
-  const [expenseForm, setExpenseForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    amount: '',
-    category: 'Autre',
-    description: '',
-    supplier: '',
-    invoiceFile: '',
-    companyId: '',
-    bankAccountId: '',
-  })
-  const [savingExpense, setSavingExpense] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [analyticsEntityType, setAnalyticsEntityType] = useState<'client' | 'company' | ''>('')
@@ -406,6 +433,14 @@ export default function ComptabilitePage() {
   }, [])
 
   useEffect(() => {
+    if (expenseModalOpen && (plan === 'pro' || plan === 'business')) {
+      fetch('/api/employees')
+        .then((r) => (r.status === 403 ? [] : r.ok ? r.json() : []))
+        .then(setEmployees)
+    }
+  }, [expenseModalOpen, plan])
+
+  useEffect(() => {
     setLoading(true)
     Promise.all([
       fetch(`/api/comptabilite/overview?from=${periodFrom}&to=${periodTo}&year=${chartYear}`).then((r) => {
@@ -472,45 +507,15 @@ export default function ComptabilitePage() {
 
   const openEditExpense = (e: Expense) => {
     setEditingExpense(e)
-    setExpenseForm({
-      date: e.date.slice(0, 10),
-      amount: String(e.amount),
-      category: e.category,
-      description: e.description ?? '',
-      supplier: e.supplier ?? '',
-      invoiceFile: e.invoiceFile ?? '',
-      companyId: e.companyId ?? '',
-      bankAccountId: (e as { bankAccountId?: string | null }).bankAccountId ?? '',
-    })
     setExpenseModalOpen(true)
   }
 
-  const saveExpense = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSavingExpense(true)
-    const body = {
-      date: expenseForm.date,
-      amount: Number(expenseForm.amount) || 0,
-      category: expenseForm.category,
-      description: expenseForm.description.trim() || null,
-      supplier: expenseForm.supplier.trim() || null,
-      invoiceFile: expenseForm.invoiceFile.trim() || null,
-      companyId: expenseForm.companyId.trim() || null,
-      bankAccountId: expenseForm.bankAccountId.trim() || null,
-    }
-    const url = editingExpense ? `/api/expenses/${editingExpense.id}` : '/api/expenses'
-    const method = editingExpense ? 'PUT' : 'POST'
-    try {
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      if (res.ok) {
-        setExpenseModalOpen(false)
-        fetchExpenses()
-        fetchOverview()
-        fetchTransactions()
-      }
-    } finally {
-      setSavingExpense(false)
-    }
+  const onExpenseModalSuccess = () => {
+    setExpenseModalOpen(false)
+    setEditingExpense(null)
+    fetchExpenses()
+    fetchOverview()
+    fetchTransactions()
   }
 
   const deleteExpense = async (id: string) => {
@@ -731,13 +736,44 @@ export default function ComptabilitePage() {
         </div>
       </section>
 
+      {/* ——— 2b. Dépenses par catégorie (lignes) ——— */}
+      {overview?.expensesByCategoryByMonth && overview.expensesByCategoryByMonth.length > 0 && (() => {
+        const first = overview.expensesByCategoryByMonth[0]
+        const categoryKeys = Object.keys(first).filter((k) => k !== 'month' && k !== 'label') as string[]
+        const COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6', '#a855f7']
+        return (
+          <section>
+            <h2 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider mb-4">Dépenses par catégorie</h2>
+            <div className="p-6 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+              <div className="h-[320px]">
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={overview.expensesByCategoryByMonth} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                    <YAxis hide domain={['auto', 'auto']} />
+                    <Tooltip content={<ExpensesByCategoryTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                    <Legend />
+                    {categoryKeys.map((cat, i) => (
+                      <Line key={cat} type="monotone" dataKey={cat} name={cat} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} connectNulls />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-xs text-[var(--muted)] mt-4 pt-3 border-t border-[var(--border)]/50">
+                Une ligne par catégorie de dépense. Survolez un mois pour voir le détail.
+              </p>
+            </div>
+          </section>
+        )
+      })()}
+
       {/* ——— 3. Expense management ——— */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wider">Dépenses</h2>
           <button
             type="button"
-            onClick={() => { setEditingExpense(null); setExpenseForm({ date: new Date().toISOString().slice(0, 10), amount: '', category: 'Autre', description: '', supplier: '', invoiceFile: '', companyId: '', bankAccountId: '' }); setExpenseModalOpen(true) }}
+            onClick={() => { setEditingExpense(null); setExpenseModalOpen(true) }}
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border)] font-medium text-sm hover:bg-[var(--border)]/20"
           >
             Nouvelle dépense
@@ -745,19 +781,19 @@ export default function ComptabilitePage() {
         </div>
         <div className="p-6 rounded-xl border border-[var(--border)] bg-[var(--background)]">
           <div className="mb-4">
-            <p className="text-sm text-[var(--muted)]">Liste des dépenses sur la période</p>
+            <p className="text-sm text-[var(--muted)]">Liste des dépenses sur la période (20 lignes visibles, défilement pour le reste)</p>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[calc(20*2.75rem)] border border-[var(--border)]/50 rounded-lg">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-[var(--background)] shadow-[0_1px_0_0_var(--border)]">
                 <tr className="border-b border-[var(--border)] text-left text-[var(--muted)]">
-                  <th className="pb-2 pr-4 font-medium">Date</th>
-                  <th className="pb-2 pr-4 font-medium">Description</th>
-                  <th className="pb-2 pr-4 font-medium">Catégorie</th>
-                  <th className="pb-2 pr-4 font-medium">Société</th>
-                  <th className="pb-2 pr-4 font-medium text-right">Montant</th>
-                  <th className="pb-2 pr-4 font-medium">Fournisseur</th>
-                  <th className="pb-2 font-medium text-right">Actions</th>
+                  <th className="pb-2 pt-2 pr-4 font-medium bg-[var(--background)]">Date</th>
+                  <th className="pb-2 pt-2 pr-4 font-medium bg-[var(--background)]">Description</th>
+                  <th className="pb-2 pt-2 pr-4 font-medium bg-[var(--background)]">Catégorie</th>
+                  <th className="pb-2 pt-2 pr-4 font-medium bg-[var(--background)]">Pour qui</th>
+                  <th className="pb-2 pt-2 pr-4 font-medium text-right bg-[var(--background)]">Montant</th>
+                  <th className="pb-2 pt-2 pr-4 font-medium bg-[var(--background)]">Fournisseur</th>
+                  <th className="pb-2 pt-2 font-medium text-right bg-[var(--background)]">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -766,12 +802,14 @@ export default function ComptabilitePage() {
                     <td colSpan={7} className="py-8 text-center text-[var(--muted)]">Aucune dépense</td>
                   </tr>
                 ) : (
-                  expenses.map((e) => (
+                  expenses.map((e) => {
+                    const pourQui = e.employee ? `${e.employee.firstName} ${e.employee.lastName}` : e.company?.name ?? (e.client ? [e.client.firstName, e.client.lastName].filter(Boolean).join(' ') || e.client.companyName : null) ?? 'La boîte'
+                    return (
                     <tr key={e.id} className="border-b border-[var(--border)]/60 hover:bg-[var(--border)]/10">
                       <td className="py-3 pr-4">{formatDateFR(e.date)}</td>
                       <td className="py-3 pr-4 max-w-[200px] truncate" title={e.description ?? ''}>{e.description || '—'}</td>
                       <td className="py-3 pr-4">{e.category}</td>
-                      <td className="py-3 pr-4 text-[var(--muted)]">{e.company?.name ?? '—'}</td>
+                      <td className="py-3 pr-4 text-[var(--muted)]">{pourQui}</td>
                       <td className="py-3 pr-4 text-right font-medium">{formatEuro(e.amount)}</td>
                       <td className="py-3 pr-4">{e.supplier || '—'}</td>
                       <td className="py-3 text-right">
@@ -788,7 +826,8 @@ export default function ComptabilitePage() {
                         </button>
                       </td>
                     </tr>
-                  ))
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -1157,72 +1196,12 @@ export default function ComptabilitePage() {
         </div>
       </section>
 
-      {/* Expense modal */}
-      {expenseModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setExpenseModalOpen(false)}>
-          <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--background)] shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">{editingExpense ? 'Modifier la dépense' : 'Nouvelle dépense'}</h3>
-            <form onSubmit={saveExpense} className="space-y-4">
-              <div>
-                <label className="block text-sm text-[var(--muted)] mb-1">Date</label>
-                <input type="date" value={expenseForm.date} onChange={(e) => setExpenseForm((f) => ({ ...f, date: e.target.value }))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)]" required />
-              </div>
-              <div>
-                <label className="block text-sm text-[var(--muted)] mb-1">Montant (€)</label>
-                <input type="number" step="0.01" min="0" value={expenseForm.amount} onChange={(e) => setExpenseForm((f) => ({ ...f, amount: e.target.value }))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)]" required />
-              </div>
-              <div>
-                <label className="block text-sm text-[var(--muted)] mb-1">Catégorie</label>
-                <select value={expenseForm.category} onChange={(e) => setExpenseForm((f) => ({ ...f, category: e.target.value }))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)]">
-                  {EXPENSE_CATEGORIES.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-[var(--muted)] mb-1">Société (optionnel)</label>
-                <select value={expenseForm.companyId} onChange={(e) => setExpenseForm((f) => ({ ...f, companyId: e.target.value }))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)]">
-                  <option value="">— Aucune —</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-              {bankAccounts.length > 0 && (
-                <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">Compte en banque{bankAccounts.length > 1 ? ' (optionnel)' : ''}</label>
-                  <select value={expenseForm.bankAccountId} onChange={(e) => setExpenseForm((f) => ({ ...f, bankAccountId: e.target.value }))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)]">
-                    <option value="">— Aucun —</option>
-                    {bankAccounts.map((acc) => (
-                      <option key={acc.id} value={acc.id}>{acc.name || acc.iban || 'Compte'}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="block text-sm text-[var(--muted)] mb-1">Description (optionnel)</label>
-                <input type="text" value={expenseForm.description} onChange={(e) => setExpenseForm((f) => ({ ...f, description: e.target.value }))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)]" placeholder="Ex. Abonnement Slack" />
-              </div>
-              <div>
-                <label className="block text-sm text-[var(--muted)] mb-1">Fournisseur (optionnel)</label>
-                <input type="text" value={expenseForm.supplier} onChange={(e) => setExpenseForm((f) => ({ ...f, supplier: e.target.value }))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)]" placeholder="Nom du fournisseur" />
-              </div>
-              <div>
-                <label className="block text-sm text-[var(--muted)] mb-1">Lien reçu / pièce (optionnel)</label>
-                <input type="url" value={expenseForm.invoiceFile} onChange={(e) => setExpenseForm((f) => ({ ...f, invoiceFile: e.target.value }))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)]" placeholder="https://..." />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button type="submit" disabled={savingExpense} className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium disabled:opacity-50">
-                  {savingExpense ? 'Enregistrement…' : 'Enregistrer'}
-                </button>
-                <button type="button" onClick={() => setExpenseModalOpen(false)} className="px-4 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--border)]/20">
-                  Annuler
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateExpenseModal
+        open={expenseModalOpen}
+        onClose={() => { setExpenseModalOpen(false); setEditingExpense(null) }}
+        onSuccess={onExpenseModalSuccess}
+        editExpense={editingExpense}
+      />
     </div>
   )
 }

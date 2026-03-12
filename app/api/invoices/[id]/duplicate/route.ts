@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getNextInvoiceNumber } from '@/lib/billing-settings'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,7 @@ export async function POST(
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
   const original = await prisma.invoice.findFirst({
-    where: { id, userId: session.id },
+    where: { id, userId: session.id, ...whereNotDeleted },
     include: { lines: true },
   })
   if (!original) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })

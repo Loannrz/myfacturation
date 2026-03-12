@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 
-export type BillingEntityType = 'invoice' | 'quote' | 'client' | 'company' | 'expense' | 'credit_note'
+export type BillingEntityType = 'invoice' | 'quote' | 'client' | 'company' | 'expense' | 'credit_note' | 'employee'
 
 export async function logBillingActivity(
   userId: string,

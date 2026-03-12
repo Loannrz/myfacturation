@@ -166,7 +166,7 @@ export default function NouvelAvoirPage() {
           <div>
             <p className="font-medium text-amber-800 dark:text-amber-200">Informations requises</p>
             <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">{CANNOT_CREATE_MESSAGE}</p>
-            <Link href="/parametres" className="inline-block mt-2 text-sm font-medium text-amber-700 dark:text-amber-200 underline">Paramètres →</Link>
+            <Link href="/parametres#etablissements" className="inline-block mt-2 text-sm font-medium text-amber-700 dark:text-amber-200 underline">Paramètres →</Link>
           </div>
         </div>
       </div>

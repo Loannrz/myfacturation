@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Search, Eye, Mail, UserPlus, Send, ChevronDown, Trash2 } from 'lucide-react'
+import { Search, Eye, Mail, UserPlus, Send, ChevronDown, Trash2, Database } from 'lucide-react'
 
 type UserRow = {
   id: string
   name: string | null
   email: string | null
+  role?: string
   plan: string
   billingCycle: string | null
   suspended: boolean
@@ -34,6 +35,7 @@ export default function AdminUsersPage() {
   const [emailMenuOpen, setEmailMenuOpen] = useState<string | null>(null)
   const [sendingEmail, setSendingEmail] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [seedingId, setSeedingId] = useState<string | null>(null)
 
   const EMAIL_OPTIONS = [
     { id: 'welcome', label: 'Email bienvenue' },
@@ -104,6 +106,21 @@ export default function AdminUsersPage() {
   }
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR')
+
+  const seedTestData = (userId: string, userEmail: string | null) => {
+    if (!confirm(
+      `Générer des données de test pour ${userEmail || userId} ?\n\nCela va créer : clients, sociétés, produits, devis, factures, avoirs, dépenses (et salariés si Business) sur l'année en cours. Cette action peut prendre quelques secondes.`
+    )) return
+    setSeedingId(userId)
+    fetch(`/api/admin/users/${userId}/seed-test-data`, { method: 'POST' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) alert(data.error)
+        else alert(`Données créées : ${data.created?.clients ?? 0} clients, ${data.created?.companies ?? 0} sociétés, ${data.created?.products ?? 0} produits, ${data.created?.quotes ?? 0} devis, ${data.created?.invoices ?? 0} factures, ${data.created?.creditNotes ?? 0} avoirs, ${data.created?.expenses ?? 0} dépenses.`)
+      })
+      .catch(() => alert('Erreur lors de la génération.'))
+      .finally(() => setSeedingId(null))
+  }
 
   const deleteUser = (userId: string, userName: string | null) => {
     if (!confirm(`Supprimer définitivement le compte ${userName || userId} et toutes ses données ?`)) return
@@ -261,6 +278,7 @@ export default function AdminUsersPage() {
                   <th className="text-left p-4 font-medium">ID</th>
                   <th className="text-left p-4 font-medium">Nom</th>
                   <th className="text-left p-4 font-medium">Email</th>
+                  <th className="text-left p-4 font-medium">Rôle</th>
                   <th className="text-left p-4 font-medium">Plan</th>
                   <th className="text-left p-4 font-medium">Inscription</th>
                   <th className="text-left p-4 font-medium">Statut</th>
@@ -273,6 +291,13 @@ export default function AdminUsersPage() {
                     <td className="p-4 font-mono text-xs text-[var(--muted)]">{u.id.slice(0, 8)}…</td>
                     <td className="p-4">{u.name ?? '—'}</td>
                     <td className="p-4">{u.email ?? '—'}</td>
+                    <td className="p-4">
+                      {u.role === 'admin' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300">Admin</span>
+                      ) : (
+                        <span className="text-[var(--muted)]">Utilisateur</span>
+                      )}
+                    </td>
                     <td className="p-4">{u.plan}</td>
                     <td className="p-4">{formatDate(u.createdAt)}</td>
                     <td className="p-4">
@@ -286,6 +311,16 @@ export default function AdminUsersPage() {
                         <Eye className="w-3 h-3" />
                         Voir
                       </Link>
+                      <button
+                        type="button"
+                        onClick={() => seedTestData(u.id, u.email)}
+                        disabled={!!seedingId}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-amber-200 text-amber-700 dark:text-amber-400 text-xs hover:bg-amber-50 dark:hover:bg-amber-950/30 disabled:opacity-50"
+                        title="Générer des données de test (clients, factures, devis, avoirs, dépenses…)"
+                      >
+                        <Database className="w-3 h-3" />
+                        {seedingId === u.id ? '…' : 'Données de test'}
+                      </button>
                       <button
                         type="button"
                         onClick={() => sendResetEmail(u.id)}

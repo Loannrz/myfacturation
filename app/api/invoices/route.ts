@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBillingSettings, getNextInvoiceNumber, parseBankAccounts } from '@/lib/billing-settings'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
 
@@ -26,13 +27,13 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status') ?? undefined
   const filter = searchParams.get('filter') ?? undefined // all | paid | unpaid | overdue
-  const q = searchParams.get('q') ?? ''
+  const q = (searchParams.get('q') ?? '').trim()
   const where: {
     userId: string
     status?: string | { not?: string; in?: string[] }
     dueDate?: { lt: string; not: null }
-    number?: { contains: string }
-  } = { userId: session.id }
+    OR?: Array<Record<string, unknown>>
+  } = { userId: session.id, ...whereNotDeleted }
   if (status) where.status = status
   else if (filter === 'paid') where.status = 'paid'
   else if (filter === 'unpaid') where.status = { in: ['draft', 'sent', 'pending', 'late'] }
@@ -41,13 +42,25 @@ export async function GET(req: NextRequest) {
     where.status = { not: 'paid' }
     where.dueDate = { lt: todayStr, not: null }
   }
-  if (q.trim()) where.number = { contains: q.trim() }
+  if (q) {
+    const orConditions: Array<Record<string, unknown>> = [
+      { number: { contains: q, mode: 'insensitive' } },
+      { client: { OR: [{ firstName: { contains: q, mode: 'insensitive' } }, { lastName: { contains: q, mode: 'insensitive' } }, { companyName: { contains: q, mode: 'insensitive' } }] } },
+      { lines: { some: { description: { contains: q, mode: 'insensitive' } } } },
+    ]
+    const amount = parseFloat(q.replace(',', '.'))
+    if (!Number.isNaN(amount) && isFinite(amount)) {
+      orConditions.push({ totalHT: { gte: amount - 0.01, lte: amount + 0.01 } }, { totalTTC: { gte: amount - 0.01, lte: amount + 0.01 } })
+    }
+    where.OR = orConditions
+  }
 
   // Échéance dépassée → passer en "En retard", sauf si payée ou annulée
   const today = new Date().toISOString().slice(0, 10)
   await prisma.invoice.updateMany({
     where: {
       userId: session.id,
+      ...whereNotDeleted,
       status: { in: ['sent', 'pending'] },
       dueDate: { lt: today },
     },

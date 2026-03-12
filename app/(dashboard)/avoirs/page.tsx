@@ -120,13 +120,13 @@ export default function AvoirsPage() {
     <div className="max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Avoirs</h1>
-        <p className="text-[var(--muted)] text-sm mt-1">Les avoirs réduisent le chiffre d&apos;affaires (factures payées − avoirs). Pour en créer un, utilisez la catégorie &laquo;&nbsp;Créer devis / facture&nbsp;&raquo; dans le menu.</p>
+        <p className="text-[var(--muted)] text-sm mt-1">Les avoirs réduisent le chiffre d&apos;affaires (factures payées − avoirs). Pour en créer un, utilisez la catégorie &laquo;&nbsp;Créer&nbsp;&raquo; dans le menu.</p>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher par numéro…" className="w-full pl-9 pr-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (numéro, client, description, montant)…" className="w-full pl-9 pr-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" />
         </div>
         <select
           value={statusFilter}
@@ -145,7 +145,6 @@ export default function AvoirsPage() {
         <div className="border border-[var(--border)] rounded-xl p-8 text-center text-[var(--muted)]">
           <RotateCcw className="w-10 h-10 mx-auto mb-2 opacity-50" />
           <p>Aucun avoir.</p>
-          <Link href="/creer" className="inline-block mt-2 text-sm font-medium text-[var(--foreground)] hover:underline">Créer devis / facture / avoir →</Link>
         </div>
       ) : (
         <div className="border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--background)]">

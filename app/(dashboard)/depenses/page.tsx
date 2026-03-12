@@ -2,18 +2,11 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { Pencil, Trash2, ExternalLink, Wallet, Search } from 'lucide-react'
+import { Pencil, Trash2, ExternalLink, Search } from 'lucide-react'
 import { useSession } from 'next-auth/react'
-import { CreateExpenseModal } from '../components/CreateExpenseModal'
 import { UpgradeGate } from '../components/UpgradeGate'
-
-const EXPENSE_CATEGORIES = [
-  { value: 'Transport', label: 'Transport' },
-  { value: 'Matériel', label: 'Matériel' },
-  { value: 'Logiciel', label: 'Logiciel' },
-  { value: 'Marketing', label: 'Marketing' },
-  { value: 'Autre', label: 'Autre' },
-] as const
+import { CreateExpenseModal, type ExpenseForEdit } from '../components/CreateExpenseModal'
+import { EXPENSE_CATEGORIES } from '@/lib/expense-categories'
 
 const MONTHS = [
   { value: '', label: 'Tous les mois' },
@@ -41,6 +34,10 @@ type Expense = {
   invoiceFile: string | null
   companyId: string | null
   company: { id: string; name: string } | null
+  clientId: string | null
+  client: { id: string; firstName: string; lastName: string; companyName: string | null } | null
+  employeeId: string | null
+  employee: { id: string; firstName: string; lastName: string } | null
   bankAccountId: string | null
 }
 
@@ -67,7 +64,6 @@ export default function DepensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [forbidden, setForbidden] = useState(false)
-  const [createModalOpen, setCreateModalOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const currentYear = new Date().getFullYear()
   const [filterYear, setFilterYear] = useState(currentYear)
@@ -75,6 +71,8 @@ export default function DepensesPage() {
   const [filterCategory, setFilterCategory] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<ExpenseForEdit | null>(null)
 
   const plan = (session?.user as { subscriptionPlan?: string })?.subscriptionPlan ?? 'starter'
   const canAccounting = plan === 'pro' || plan === 'business'
@@ -143,19 +141,15 @@ export default function DepensesPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dépenses</h1>
-          <p className="text-[var(--muted)] text-sm mt-1">Filtrez par année, mois, catégorie ou recherchez dans la description et le fournisseur.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCreateModalOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90"
-        >
-          <Wallet className="w-4 h-4" />
-          Créer une dépense
-        </button>
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Dépenses</h1>
+        <p className="text-[var(--muted)] text-sm mt-1">
+          Liste de vos dépenses.
+          {' '}
+          <button type="button" onClick={() => { setEditingExpense(null); setExpenseModalOpen(true) }} className="text-[var(--foreground)] font-medium hover:underline">Créer une dépense</button>
+          {' '}
+          ou <Link href="/creer" className="text-[var(--foreground)] font-medium hover:underline">Créer →</Link> (menu)
+        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--background)]">
@@ -227,7 +221,7 @@ export default function DepensesPage() {
                   <th className="p-3 font-medium">Date</th>
                   <th className="p-3 font-medium">Description</th>
                   <th className="p-3 font-medium">Catégorie</th>
-                  <th className="p-3 font-medium">Société</th>
+                  <th className="p-3 font-medium">Pour qui</th>
                   <th className="p-3 font-medium text-right">Montant</th>
                   <th className="p-3 font-medium">Fournisseur</th>
                   <th className="p-3 font-medium text-right">Actions</th>
@@ -236,32 +230,35 @@ export default function DepensesPage() {
               <tbody>
                 {expenses.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-[var(--muted)]">Aucune dépense. Créez-en une ou consultez la <Link href="/comptabilite" className="text-[var(--foreground)] hover:underline">Comptabilité</Link>.</td>
+                    <td colSpan={7} className="p-8 text-center text-[var(--muted)]">Aucune dépense. <button type="button" onClick={() => { setEditingExpense(null); setExpenseModalOpen(true) }} className="text-[var(--foreground)] hover:underline">Créer une dépense</button> ou consultez la <Link href="/comptabilite" className="text-[var(--foreground)] hover:underline">Comptabilité</Link>.</td>
                   </tr>
                 ) : (
-                  expenses.map((e) => (
-                    <tr key={e.id} className="border-b border-[var(--border)]/60 hover:bg-[var(--border)]/10">
-                      <td className="p-3">{formatDateFR(e.date)}</td>
-                      <td className="p-3 max-w-[200px] truncate" title={e.description ?? ''}>{e.description || '—'}</td>
-                      <td className="p-3">{e.category}</td>
-                      <td className="p-3 text-[var(--muted)]">{e.company?.name ?? '—'}</td>
-                      <td className="p-3 text-right font-medium text-rose-600 dark:text-rose-400">{formatEuro(e.amount)}</td>
-                      <td className="p-3">{e.supplier || '—'}</td>
-                      <td className="p-3 text-right">
-                        {e.invoiceFile && (
-                          <a href={e.invoiceFile} target="_blank" rel="noopener noreferrer" className="inline-flex p-2 text-[var(--muted)] hover:text-[var(--foreground)]" title="Voir le reçu">
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        )}
-                        <Link href={`/comptabilite?edit=${e.id}`} className="inline-flex p-2 text-[var(--muted)] hover:text-[var(--foreground)]" title="Modifier (Comptabilité)">
-                          <Pencil className="w-4 h-4" />
-                        </Link>
-                        <button type="button" onClick={() => deleteExpense(e.id)} disabled={deletingId === e.id} className="inline-flex p-2 text-[var(--muted)] hover:text-rose-500 disabled:opacity-50" title="Supprimer">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  expenses.map((e) => {
+                    const pourQui = e.employee ? `${e.employee.firstName} ${e.employee.lastName}` : e.company?.name ?? (e.client ? [e.client.firstName, e.client.lastName].filter(Boolean).join(' ') || e.client.companyName : null) ?? 'La boîte'
+                    return (
+                      <tr key={e.id} className="border-b border-[var(--border)]/60 hover:bg-[var(--border)]/10">
+                        <td className="p-3">{formatDateFR(e.date)}</td>
+                        <td className="p-3 max-w-[200px] truncate" title={e.description ?? ''}>{e.description || '—'}</td>
+                        <td className="p-3">{e.category}</td>
+                        <td className="p-3 text-[var(--muted)]">{pourQui}</td>
+                        <td className="p-3 text-right font-medium text-rose-600 dark:text-rose-400">{formatEuro(e.amount)}</td>
+                        <td className="p-3">{e.supplier || '—'}</td>
+                        <td className="p-3 text-right">
+                          {e.invoiceFile && (
+                            <a href={e.invoiceFile} target="_blank" rel="noopener noreferrer" className="inline-flex p-2 text-[var(--muted)] hover:text-[var(--foreground)]" title="Voir le reçu">
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          )}
+                          <button type="button" onClick={() => { setEditingExpense(e); setExpenseModalOpen(true) }} className="inline-flex p-2 text-[var(--muted)] hover:text-[var(--foreground)]" title="Modifier">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button type="button" onClick={() => deleteExpense(e.id)} disabled={deletingId === e.id} className="inline-flex p-2 text-[var(--muted)] hover:text-rose-500 disabled:opacity-50" title="Supprimer">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -270,10 +267,15 @@ export default function DepensesPage() {
       </div>
 
       <p className="text-xs text-[var(--muted)]">
-        Pour modifier une dépense ou voir les graphiques, allez sur la page <Link href="/comptabilite" className="text-[var(--foreground)] hover:underline">Comptabilité</Link>.
+        Cliquez sur le crayon pour modifier une dépense. Voir les graphiques sur la page <Link href="/comptabilite" className="text-[var(--foreground)] hover:underline">Comptabilité</Link>.
       </p>
 
-      <CreateExpenseModal open={createModalOpen} onClose={() => setCreateModalOpen(false)} onSuccess={fetchExpenses} />
+      <CreateExpenseModal
+        open={expenseModalOpen}
+        onClose={() => { setExpenseModalOpen(false); setEditingExpense(null) }}
+        onSuccess={() => { fetchExpenses(); setExpenseModalOpen(false); setEditingExpense(null) }}
+        editExpense={editingExpense}
+      />
     </div>
   )
 }

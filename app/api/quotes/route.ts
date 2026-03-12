@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBillingSettings, getNextQuoteNumber, parseBankAccounts } from '@/lib/billing-settings'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
 
@@ -14,14 +15,25 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status') ?? undefined
-  const q = searchParams.get('q') ?? ''
-  const where: { userId: string; status?: string; number?: { contains: string } } = { userId: session.id }
+  const q = (searchParams.get('q') ?? '').trim()
+  const where: { userId: string; deletedAt?: null; status?: string; OR?: Array<Record<string, unknown>> } = { userId: session.id, ...whereNotDeleted }
   if (status) where.status = status
-  if (q.trim()) where.number = { contains: q.trim() }
+  if (q) {
+    const orConditions: Array<Record<string, unknown>> = [
+      { number: { contains: q, mode: 'insensitive' } },
+      { client: { OR: [{ firstName: { contains: q, mode: 'insensitive' } }, { lastName: { contains: q, mode: 'insensitive' } }, { companyName: { contains: q, mode: 'insensitive' } }] } },
+      { lines: { some: { description: { contains: q, mode: 'insensitive' } } } },
+    ]
+    const amount = parseFloat(q.replace(',', '.'))
+    if (!Number.isNaN(amount) && isFinite(amount)) {
+      orConditions.push({ totalHT: { gte: amount - 0.01, lte: amount + 0.01 } }, { totalTTC: { gte: amount - 0.01, lte: amount + 0.01 } })
+    }
+    where.OR = orConditions
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   await prisma.quote.updateMany({
-    where: { userId: session.id, status: { in: ['draft', 'sent'] }, dueDate: { lt: today } },
+    where: { userId: session.id, ...whereNotDeleted, status: { in: ['draft', 'sent'] }, dueDate: { lt: today } },
     data: { status: 'expired' },
   })
 
@@ -50,7 +62,7 @@ export async function POST(req: NextRequest) {
   if (quotesLimit != null) {
     const prefix = new Date().toISOString().slice(0, 7)
     const count = await prisma.quote.count({
-      where: { userId: session.id, issueDate: { startsWith: prefix } },
+      where: { userId: session.id, ...whereNotDeleted, issueDate: { startsWith: prefix } },
     })
     if (count >= quotesLimit) {
       return NextResponse.json(

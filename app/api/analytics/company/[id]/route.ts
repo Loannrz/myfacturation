@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +31,7 @@ export async function GET(
   const userId = session.id
 
   const company = await prisma.company.findFirst({
-    where: { id, userId },
+    where: { id, userId, ...whereNotDeleted },
     select: { id: true },
   })
   if (!company) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
@@ -46,6 +47,7 @@ export async function GET(
     prisma.invoice.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         companyId: id,
         status: 'paid',
         paidAt: {
@@ -57,12 +59,13 @@ export async function GET(
       select: { totalTTC: true, paidAt: true },
     }),
     prisma.quote.findMany({
-      where: { userId, companyId: id, issueDate: { gte: yearStart, lte: yearEnd } },
+      where: { userId, ...whereNotDeleted, companyId: id, issueDate: { gte: yearStart, lte: yearEnd } },
       select: { issueDate: true, status: true },
     }),
     prisma.creditNote.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         companyId: id,
         status: 'refunded',
         refundedAt: {

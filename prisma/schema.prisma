@@ -76,6 +76,7 @@ model User {
   sessions            Session[]
   clients              Client[]
   companies            Company[]
+  employees            Employee[]
   quotes               Quote[]
   invoices             Invoice[]
   creditNotes          CreditNote[]
@@ -163,11 +164,14 @@ model Client {
   legalForm       String?
   createdAt       DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   quotes         Quote[]
   invoices       Invoice[]
   creditNotes    CreditNote[]
+  expenses       Expense[]
   @@index([userId])
+  @@index([userId, deletedAt])
 }
 
 model Company {
@@ -186,12 +190,14 @@ model Company {
   website     String?
   createdAt   DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   quotes      Quote[]
   invoices    Invoice[]
   creditNotes CreditNote[]
   expenses    Expense[]
   @@index([userId])
+  @@index([userId, deletedAt])
 }
 
 model Quote {
@@ -215,6 +221,7 @@ model Quote {
   signedAt        DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?
   user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   client           Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
   company          Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
@@ -222,6 +229,7 @@ model Quote {
   invoices         Invoice[]
   @@unique([userId, number])
   @@index([userId])
+  @@index([userId, deletedAt])
 }
 
 model QuoteLine {
@@ -259,6 +267,7 @@ model Invoice {
   paidAt           DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   client           Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
   company          Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
@@ -267,6 +276,7 @@ model Invoice {
   creditNotes      CreditNote[]
   @@unique([userId, number])
   @@index([userId])
+  @@index([userId, deletedAt])
 }
 
 model InvoiceLine {
@@ -303,6 +313,7 @@ model CreditNote {
   paymentMethod   String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   invoice         Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   client          Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
@@ -310,6 +321,7 @@ model CreditNote {
   lines           CreditNoteLine[]
   @@unique([userId, number])
   @@index([userId])
+  @@index([userId, deletedAt])
   @@index([invoiceId])
 }
 
@@ -326,10 +338,40 @@ model CreditNoteLine {
   creditNote  CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
 }
 
+// ——— Salariés (plan Business uniquement) ———
+model Employee {
+  id                   String    @id @default(cuid())
+  userId               String
+  firstName            String
+  lastName             String
+  email                String
+  phone                String?
+  address              String?
+  city                 String?
+  postalCode           String?
+  country              String?
+  position             String?   // poste dans l'entreprise
+  contractType         String?   // CDD | CDI | Alternant | Autre
+  hireDate             String?   // YYYY-MM-DD
+  status               String    @default("active") // active | inactive
+  socialSecurityNumber String?   // numéro de sécurité sociale (optionnel)
+  internalNotes        String?   @db.Text
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expenses             Expense[]
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, deletedAt])
+}
+
 model Expense {
   id             String    @id @default(cuid())
   userId         String
   companyId      String?   // société liée (optionnel)
+  clientId       String?   // particulier / client (optionnel)
+  employeeId     String?   // salarié concerné (si catégorie = Salaires)
   bankAccountId  String?   // id du compte (BillingSettings.bankAccounts JSON)
   date           String
   amount         Float
@@ -339,10 +381,16 @@ model Expense {
   invoiceFile    String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   company        Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  client         Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  employee       Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   @@index([userId])
+  @@index([userId, deletedAt])
   @@index([companyId])
+  @@index([clientId])
+  @@index([employeeId])
   @@index([bankAccountId])
 }
 

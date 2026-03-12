@@ -183,7 +183,7 @@ export default function NouveauDevisPage() {
             <h1 className="text-xl font-semibold text-amber-800 dark:text-amber-200">Impossible de créer un devis</h1>
             <p className="text-[var(--foreground)] mt-2">{CANNOT_CREATE_MESSAGE}</p>
             <p className="text-sm text-[var(--muted)] mt-2">Renseignez votre nom et toutes les informations sur vos factures (forme juridique, raison sociale, SIRET, adresse, code postal, ville) dans Paramètres.</p>
-            <Link href="/parametres" className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90">
+            <Link href="/parametres#etablissements" className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90">
               Remplir les informations →
             </Link>
           </div>

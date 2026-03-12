@@ -3,44 +3,41 @@ const bcrypt = require('bcryptjs')
 
 const prisma = new PrismaClient()
 
-const ADMIN_EMAIL = 'admin@admin.com'
+const ADMIN_EMAIL = 'noreply@myfacturation360.fr'
 const ADMIN_PASSWORD = 'Loul0u2ko5!'
 
 async function main() {
-  // 1. Admin user (identifiant admin@admin.com, mot de passe Loul0u2ko5!)
+  // 1. Admin user (identifiant noreply@myfacturation360.fr, mot de passe Loul0u2ko5!)
   const hash = await bcrypt.hash(ADMIN_PASSWORD, 10)
-  const admin = await prisma.user.upsert({
-    where: { email: ADMIN_EMAIL },
-    update: { role: 'admin', passwordHash: hash, name: 'Admin' },
-    create: {
-      email: ADMIN_EMAIL,
-      name: 'Admin',
-      passwordHash: hash,
-      emailVerified: new Date(),
-      role: 'admin',
-      subscriptionPlan: 'business',
-      planType: 'premium',
-    },
-  }).catch(async () => {
-    const existing = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL } })
-    if (existing) {
-      return prisma.user.update({
-        where: { id: existing.id },
-        data: { role: 'admin', passwordHash: hash },
-      })
-    }
-    return prisma.user.create({
-      data: {
-        email: ADMIN_EMAIL,
-        name: 'Admin',
-        passwordHash: hash,
-        emailVerified: new Date(),
-        role: 'admin',
-        subscriptionPlan: 'business',
-        planType: 'premium',
-      },
-    })
+  const normalizedEmail = ADMIN_EMAIL.trim().toLowerCase()
+  // Trouver l'utilisateur même si l'email en base a une casse différente
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
   })
+  const admin = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          role: 'admin',
+          passwordHash: hash,
+          name: existing.name || 'Admin',
+          email: normalizedEmail,
+          subscriptionPlan: 'business',
+          planType: 'premium',
+          emailVerified: existing.emailVerified || new Date(),
+        },
+      })
+    : await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          name: 'Admin',
+          passwordHash: hash,
+          emailVerified: new Date(),
+          role: 'admin',
+          subscriptionPlan: 'business',
+          planType: 'premium',
+        },
+      })
   console.log('Admin user:', admin.email, 'role:', admin.role)
 
   // 2. Plans

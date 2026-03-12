@@ -66,7 +66,6 @@ export async function GET(req: NextRequest) {
   const skip = (page - 1) * limit
 
   const where = {
-    role: 'user' as const,
     ...(search.trim()
       ? {
           OR: [
@@ -84,6 +83,7 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         email: true,
+        role: true,
         subscriptionPlan: true,
         billingCycle: true,
         suspended: true,
@@ -102,6 +102,7 @@ export async function GET(req: NextRequest) {
       id: u.id,
       name: u.name,
       email: u.email,
+      role: u.role,
       plan: u.subscriptionPlan,
       billingCycle: u.billingCycle,
       suspended: u.suspended,

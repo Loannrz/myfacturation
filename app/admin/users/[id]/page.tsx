@@ -9,6 +9,7 @@ type UserDetail = {
   id: string
   name: string | null
   email: string | null
+  role?: string
   phone: string | null
   subscriptionPlan: string
   billingCycle: string | null
@@ -136,6 +137,8 @@ export default function AdminUserDetailPage() {
           <dd>{user.name ?? '—'}</dd>
           <dt className="text-[var(--muted)]">Email</dt>
           <dd>{user.email ?? '—'}</dd>
+          <dt className="text-[var(--muted)]">Rôle</dt>
+          <dd>{user.role === 'admin' ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300">Admin</span> : 'Utilisateur'}</dd>
           <dt className="text-[var(--muted)]">Plan</dt>
           <dd>{user.subscriptionPlan}</dd>
           <dt className="text-[var(--muted)]">Cycle</dt>

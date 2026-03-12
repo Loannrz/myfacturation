@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,7 @@ export async function GET(req: NextRequest) {
     type === 'client' ? [] : prisma.invoice.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         OR: [
           { number: { contains: q, mode: 'insensitive' } },
           ...amountFilter,
@@ -40,7 +42,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     }),
     type === 'client' ? [] : prisma.quote.findMany({
-      where: { userId, number: { contains: q, mode: 'insensitive' } },
+      where: { userId, ...whereNotDeleted, number: { contains: q, mode: 'insensitive' } },
       select: { id: true, number: true, status: true, totalTTC: true, issueDate: true },
       take: 20,
       orderBy: { createdAt: 'desc' },
@@ -48,6 +50,7 @@ export async function GET(req: NextRequest) {
     type === 'invoice' || type === 'quote' ? [] : prisma.client.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         OR: [
           { firstName: { contains: q, mode: 'insensitive' } },
           { lastName: { contains: q, mode: 'insensitive' } },

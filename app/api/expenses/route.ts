@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBillingSettings, parseBankAccounts } from '@/lib/billing-settings'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   const to = req.nextUrl.searchParams.get('to') ?? undefined
   const bankAccountId = req.nextUrl.searchParams.get('bankAccountId') ?? undefined
   const search = req.nextUrl.searchParams.get('search')?.trim() ?? undefined
-  const where: Prisma.ExpenseWhereInput = { userId: session.id }
+  const where: Prisma.ExpenseWhereInput = { userId: session.id, ...whereNotDeleted }
   if (category) where.category = category
   if (bankAccountId) where.bankAccountId = bankAccountId
   if (from || to) {
@@ -34,7 +35,11 @@ export async function GET(req: NextRequest) {
   const expenses = await prisma.expense.findMany({
     where,
     orderBy: { date: 'desc' },
-    include: { company: { select: { id: true, name: true } } },
+    include: {
+      company: { select: { id: true, name: true } },
+      client: { select: { id: true, firstName: true, lastName: true, companyName: true } },
+      employee: { select: { id: true, firstName: true, lastName: true } },
+    },
   })
   return NextResponse.json(expenses)
 }
@@ -52,14 +57,17 @@ export async function POST(req: NextRequest) {
     if (bankAccounts.length > 0 && !(body.bankAccountId && String(body.bankAccountId).trim())) {
       return NextResponse.json({ error: 'Veuillez sélectionner un compte bancaire pour enregistrer la dépense.' }, { status: 400 })
     }
+    const isSalaires = body.category === 'Salaires'
     const expense = await prisma.expense.create({
       data: {
         userId: session.id,
-        companyId: body.companyId || null,
+        companyId: isSalaires ? null : (body.companyId || null),
+        clientId: isSalaires ? null : (body.clientId || null),
+        employeeId: isSalaires ? (body.employeeId || null) : (body.employeeId || null),
         bankAccountId: body.bankAccountId || null,
         date: body.date ?? new Date().toISOString().slice(0, 10),
         amount: Number(body.amount) ?? 0,
-        category: body.category ?? 'Autre',
+        category: body.category ?? 'Autres dépenses',
         description: body.description ?? undefined,
         supplier: body.supplier ?? undefined,
         invoiceFile: body.invoiceFile ?? undefined,

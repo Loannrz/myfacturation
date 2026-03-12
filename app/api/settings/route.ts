@@ -8,16 +8,23 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-  const settings = await getBillingSettings(session.id)
-  const { expenseCategories: raw, bankAccounts: rawBank, emitterProfiles: rawEmitter, ...rest } = settings
-  const bankAccounts = parseBankAccounts(typeof rawBank === 'string' ? rawBank : null)
-  const emitterProfiles = parseEmitterProfiles(typeof rawEmitter === 'string' ? rawEmitter : null)
-  return NextResponse.json({
-    ...rest,
-    expenseCategories: parseExpenseCategories(raw),
-    bankAccounts,
-    emitterProfiles,
-  })
+  try {
+    const settings = await getBillingSettings(session.id)
+    const { expenseCategories: raw, bankAccounts: rawBank, emitterProfiles: rawEmitter, ...rest } = settings
+    const bankAccounts = parseBankAccounts(typeof rawBank === 'string' ? rawBank : null)
+    const emitterProfiles = parseEmitterProfiles(typeof rawEmitter === 'string' ? rawEmitter : null)
+    return NextResponse.json({
+      ...rest,
+      expenseCategories: parseExpenseCategories(raw),
+      bankAccounts,
+      emitterProfiles,
+    })
+  } catch (err) {
+    if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
+      return NextResponse.json({ error: 'Session invalide ou compte supprimé. Reconnectez-vous.' }, { status: 401 })
+    }
+    throw err
+  }
 }
 
 export async function PUT(req: NextRequest) {

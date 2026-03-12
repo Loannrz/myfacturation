@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Plus, Trash2, Sparkles, Lock } from 'lucide-react'
+import { Plus, Trash2, Sparkles, Lock, AlertCircle } from 'lucide-react'
 import { planLabel, canAccessFeatureByPlan, maxEstablishments, maxBankAccounts } from '@/lib/subscription'
 
 type BankAccountEntry = { id: string; name: string; accountHolder: string; bankName: string; iban: string; bic: string }
@@ -209,6 +209,16 @@ export default function ParametresPage() {
     }
   }, [searchParams])
 
+  useEffect(() => {
+    if (!profile) return
+    const hash = typeof window !== 'undefined' ? window.location.hash.slice(1).toLowerCase() : ''
+    if (hash === 'etablissements' || hash === 'coordonnees-bancaires' || hash === 'requis') {
+      const id = hash === 'requis' ? 'etablissements' : hash
+      const el = document.getElementById(id)
+      if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+    }
+  }, [profile])
+
   const persistSettings = async (
     profiles: typeof emitterProfiles,
     accounts: typeof bankAccounts,
@@ -369,6 +379,9 @@ export default function ParametresPage() {
   const canEditAdvancedSettings = canAccessFeatureByPlan(subscriptionPlan, 'advancedSettings')
   const maxEstablishmentsPlan = maxEstablishments(subscriptionPlan)
   const maxBankAccountsPlan = maxBankAccounts(subscriptionPlan)
+
+  const needsEstablishment = emitterProfiles.length === 0 || (emitterProfiles.length > 0 && !(emitterProfiles[0].companyName?.trim() && emitterProfiles[0].siret?.trim()))
+  const needsBank = bankAccounts.length === 0
 
   return (
     <div className="max-w-xl mx-auto">
@@ -582,8 +595,19 @@ export default function ParametresPage() {
           </div>
         </div>
 
-        <div className="border border-[var(--border)] rounded-xl p-6">
-          <h2 className="text-sm font-medium mb-4">Établissements / Profils émetteur</h2>
+        <div
+          id="etablissements"
+          className={`rounded-xl p-6 border-2 transition-colors ${needsEstablishment ? 'border-amber-500/80 bg-amber-500/5' : 'border-[var(--border)]'}`}
+        >
+          <div className="flex items-start justify-between gap-2 mb-4">
+            <h2 className="text-sm font-medium">Établissements / Profils émetteur</h2>
+            {needsEstablishment && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-medium shrink-0">
+                <AlertCircle className="w-3.5 h-3.5" />
+                À remplir pour pouvoir facturer
+              </span>
+            )}
+          </div>
           <p className="text-xs text-[var(--muted)] mb-2">
             Ajoutez un ou plusieurs établissements. Lors de la création d&apos;un devis ou d&apos;une facture, vous choisirez avec quel établissement facturer.
           </p>
@@ -671,8 +695,19 @@ export default function ParametresPage() {
           </div>
         </div>
 
-        <div className="border border-[var(--border)] rounded-xl p-6">
-          <h2 className="text-sm font-medium mb-4">Coordonnées bancaires</h2>
+        <div
+          id="coordonnees-bancaires"
+          className={`rounded-xl p-6 border-2 transition-colors ${needsBank ? 'border-amber-500/80 bg-amber-500/5' : 'border-[var(--border)]'}`}
+        >
+          <div className="flex items-start justify-between gap-2 mb-4">
+            <h2 className="text-sm font-medium">Coordonnées bancaires</h2>
+            {needsBank && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-medium shrink-0">
+                <AlertCircle className="w-3.5 h-3.5" />
+                À remplir pour pouvoir facturer
+              </span>
+            )}
+          </div>
           <p className="text-xs text-[var(--muted)] mb-2">
             Ajoutez un ou plusieurs comptes. Lors de la création d&apos;un devis ou d&apos;une facture avec mode de paiement par virement, vous pourrez choisir le compte à afficher.
           </p>

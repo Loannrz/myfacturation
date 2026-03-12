@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 import { getBillingSettings, getNextInvoiceNumber, parseBankAccounts } from '@/lib/billing-settings'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +16,7 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
   const quote = await prisma.quote.findFirst({
-    where: { id, userId: session.id },
+    where: { id, userId: session.id, ...whereNotDeleted },
     include: { client: true, company: true, lines: true },
   })
   if (!quote) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
@@ -29,7 +30,7 @@ export async function PUT(
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
-  const existing = await prisma.quote.findFirst({ where: { id, userId: session.id } })
+  const existing = await prisma.quote.findFirst({ where: { id, userId: session.id, ...whereNotDeleted } })
   if (!existing) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
   const body = await req.json()
   const settings = await getBillingSettings(session.id)
@@ -117,7 +118,7 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
   const existing = await prisma.quote.findFirst({
-    where: { id, userId: session.id },
+    where: { id, userId: session.id, ...whereNotDeleted },
     include: { client: true, company: true, lines: true },
   })
   if (!existing) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
@@ -203,9 +204,9 @@ export async function DELETE(
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
-  const existing = await prisma.quote.findFirst({ where: { id, userId: session.id } })
+  const existing = await prisma.quote.findFirst({ where: { id, userId: session.id, ...whereNotDeleted } })
   if (!existing) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
-  await prisma.quote.delete({ where: { id } })
-  await logBillingActivity(session.id, 'quote deleted', 'quote', id)
+  await prisma.quote.update({ where: { id }, data: { deletedAt: new Date() } })
+  await logBillingActivity(session.id, 'quote deleted', 'quote', id, { number: existing.number })
   return NextResponse.json({ ok: true })
 }

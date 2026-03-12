@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { FileText, Receipt, FileMinus, AlertCircle, Info, Lock, AlertTriangle } from 'lucide-react'
+import { FileText, Receipt, FileMinus, AlertCircle, Info, Lock, AlertTriangle, UserCircle, Wallet } from 'lucide-react'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
 import {
   AreaChart,
@@ -56,6 +56,11 @@ type Stats = {
   series: SeriesPoint[]
   overdueInvoices?: OverdueInvoiceItem[]
   databaseError?: boolean
+  totalExpenses?: number
+  expensesByCategory?: Record<string, number>
+  expensesByEmployee?: Record<string, number>
+  totalEmployeeCost?: number
+  monthlySalaryTotal?: number
 }
 
 const MONTHS = [
@@ -113,6 +118,7 @@ export default function DashboardPage() {
   const [usage, setUsage] = useState<{ invoicesThisMonth: number; quotesThisMonth: number; invoicesLimit: number | null; quotesLimit: number | null } | null>(null)
   const [limitPopupOpen, setLimitPopupOpen] = useState(false)
   const [limitPopupType, setLimitPopupType] = useState<'invoices' | 'quotes'>('invoices')
+  const [employeesCount, setEmployeesCount] = useState<number | null>(null)
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
@@ -161,6 +167,11 @@ export default function DashboardPage() {
             series: data.series ?? [],
             overdueInvoices: data.overdueInvoices ?? [],
             databaseError: data.databaseError ?? false,
+            totalExpenses: data.totalExpenses ?? 0,
+            expensesByCategory: data.expensesByCategory ?? {},
+            expensesByEmployee: data.expensesByEmployee ?? {},
+            totalEmployeeCost: data.totalEmployeeCost ?? 0,
+            monthlySalaryTotal: data.monthlySalaryTotal ?? 0,
           })
         } else {
           setStats(null)
@@ -173,6 +184,17 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchStats()
   }, [fetchStats])
+
+  useEffect(() => {
+    if (subscriptionPlan === 'business') {
+      fetch('/api/employees')
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list: unknown[]) => setEmployeesCount(Array.isArray(list) ? list.length : 0))
+        .catch(() => setEmployeesCount(0))
+    } else {
+      setEmployeesCount(null)
+    }
+  }, [subscriptionPlan])
 
   useEffect(() => {
     if (subscriptionPlan !== 'starter') return
@@ -218,7 +240,7 @@ export default function DashboardPage() {
           <div>
             <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Informations requises</p>
             <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">{CANNOT_CREATE_MESSAGE}</p>
-            <Link href="/parametres" className="inline-block mt-2 text-sm font-medium text-amber-700 dark:text-amber-200 underline hover:no-underline">
+            <Link href="/parametres#etablissements" className="inline-block mt-2 text-sm font-medium text-amber-700 dark:text-amber-200 underline hover:no-underline">
               Remplir dans Paramètres →
             </Link>
           </div>
@@ -341,8 +363,8 @@ export default function DashboardPage() {
 
           <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">{periodLabel}</h2>
 
-          {/* Retard de paiement */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          {/* Retard de paiement + Factures en retard OU CA */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
             <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-[var(--muted)]">Retard de paiement</span>
@@ -356,7 +378,7 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* Factures en retard — liste des 5 dernières */}
+            {/* Factures en retard : pleine largeur (2 cols) quand il y en a */}
             {stats.overdueInvoices && stats.overdueInvoices.length > 0 ? (
               <div className="lg:col-span-2 p-5 rounded-xl border border-red-500/30 bg-red-500/5">
                 <div className="flex items-center justify-between mb-3">
@@ -380,10 +402,48 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               </div>
-            ) : null}
+            ) : (
+              /* Pas de factures en retard : CA à droite de "Retard de paiement" */
+              <div className="lg:col-span-2 p-5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-[var(--muted)]">
+                    Chiffre d&apos;affaires (total factures - total avoirs)
+                  </span>
+                  <Info className="w-4 h-4 text-[var(--muted)]" />
+                </div>
+                <p className="mt-2 text-2xl font-semibold text-purple-600 dark:text-purple-400">
+                  {formatEuro(stats.totalRevenue)}
+                </p>
+                <div className="mt-4 h-[120px] -mx-2">
+                  <ResponsiveContainer width="100%" height={chartHeight}>
+                    <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="caGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="rgb(147 51 234)" stopOpacity={0.4} />
+                          <stop offset="100%" stopColor="rgb(147 51 234)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} stroke="var(--muted)" />
+                      <YAxis hide domain={['auto', 'auto']} />
+                      <Tooltip content={<ChartTooltip valueLabel="CA" formatValue={formatEuro} />} />
+                      <Area
+                        type="monotone"
+                        dataKey="ca"
+                        stroke="rgb(147 51 234)"
+                        strokeWidth={2}
+                        fill="url(#caGrad)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+          </div>
 
-            {/* CA - grande carte avec courbe */}
-            <div className="lg:col-span-2 p-5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+          {/* CA en pleine largeur uniquement quand la liste "Factures en retard" est affichée */}
+          {stats.overdueInvoices && stats.overdueInvoices.length > 0 && (
+            <div className="mb-6 p-5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
               <div className="flex items-center gap-1.5">
                 <span className="text-sm text-[var(--muted)]">
                   Chiffre d&apos;affaires (total factures - total avoirs)
@@ -397,7 +457,7 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height={chartHeight}>
                   <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="caGrad" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="caGradFull" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="rgb(147 51 234)" stopOpacity={0.4} />
                         <stop offset="100%" stopColor="rgb(147 51 234)" stopOpacity={0} />
                       </linearGradient>
@@ -411,13 +471,13 @@ export default function DashboardPage() {
                       dataKey="ca"
                       stroke="rgb(147 51 234)"
                       strokeWidth={2}
-                      fill="url(#caGrad)"
+                      fill="url(#caGradFull)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 relative">
             {subscriptionPlan === 'starter' && (
@@ -584,6 +644,62 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Dépenses & Salariés (Pro / Business) */}
+          {(subscriptionPlan === 'pro' || subscriptionPlan === 'business') && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-[var(--muted)]">Total dépenses</span>
+                  <Wallet className="w-5 h-5 text-[var(--muted)]" />
+                </div>
+                <p className="mt-2 text-xl font-semibold text-rose-600 dark:text-rose-400">
+                  {formatEuro(stats.totalExpenses ?? 0)}
+                </p>
+                <p className="text-xs text-[var(--muted)]">sur la période</p>
+              </div>
+              {subscriptionPlan === 'business' && (
+                <>
+                  <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-[var(--muted)]">Nombre de salariés</span>
+                      <UserCircle className="w-5 h-5 text-[var(--muted)]" />
+                    </div>
+                    <p className="mt-2 text-xl font-semibold text-[var(--foreground)]">
+                      {employeesCount ?? '—'}
+                    </p>
+                    <Link href="/salaries" className="text-xs text-[var(--muted)] hover:underline">Voir les salariés</Link>
+                  </div>
+                  <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-[var(--muted)]">Coût salarial (période)</span>
+                    </div>
+                    <p className="mt-2 text-xl font-semibold text-amber-600 dark:text-amber-400">
+                      {formatEuro(stats.totalEmployeeCost ?? 0)}
+                    </p>
+                    <p className="text-xs text-[var(--muted)]">Salaires sur la période</p>
+                  </div>
+                </>
+              )}
+              <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--background)]">
+                <span className="text-sm text-[var(--muted)]">Top catégories de dépenses</span>
+                <div className="mt-2 space-y-1 max-h-20 overflow-y-auto">
+                  {Object.entries(stats.expensesByCategory ?? {})
+                    .sort(([, a], [, b]) => b - a)
+                    .slice(0, 5)
+                    .map(([cat, amount]) => (
+                      <p key={cat} className="text-sm flex justify-between gap-2">
+                        <span className="truncate text-[var(--muted)]">{cat}</span>
+                        <span className="font-medium shrink-0">{formatEuro(amount)}</span>
+                      </p>
+                    ))}
+                  {Object.keys(stats.expensesByCategory ?? {}).length === 0 && (
+                    <p className="text-sm text-[var(--muted)]">Aucune dépense</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {limitPopupOpen && subscriptionPlan === 'starter' && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setLimitPopupOpen(false)}>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { Package, Plus, Search, Pencil, Trash2 } from 'lucide-react'
+import { Package, Search, Pencil, Trash2 } from 'lucide-react'
 import { UpgradeGate } from '../components/UpgradeGate'
 
 type Product = {
@@ -54,34 +54,24 @@ export default function ProduitsPage() {
   return (
     <UpgradeGate plan={plan as 'starter' | 'pro' | 'business'} requiredPlan="pro" title="Produits / Services">
     <div className="max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Produits</h1>
-          <p className="text-[var(--muted)] text-sm mt-1">
-            Préparez des produits à réutiliser dans vos devis et factures
-            {usage && usage.productsLimit != null && (
-              <span className="ml-1">
-                — <strong className="text-[var(--foreground)]">{usage.productsCount}</strong> / {usage.productsLimit} max
-              </span>
-            )}
-          </p>
-        </div>
-        {usage && usage.productsLimit != null && usage.productsCount >= usage.productsLimit ? (
-          <Link
-            href="/formules"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium"
-          >
-            Limite atteinte — Passer à Business
-          </Link>
-        ) : (
-          <Link
-            href="/produits/nouveau"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90"
-          >
-            <Plus className="w-4 h-4" />
-            Nouveau produit
-          </Link>
-        )}
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Produits</h1>
+        <p className="text-[var(--muted)] text-sm mt-1">
+          Liste de vos produits et services. Pour en ajouter un, utilisez la catégorie &laquo;&nbsp;Créer&nbsp;&raquo; dans le menu.
+          {usage && usage.productsLimit != null && (
+            <span className="ml-1">
+              — <strong className="text-[var(--foreground)]">{usage.productsCount}</strong> / {usage.productsLimit} max
+            </span>
+          )}
+          {' '}
+          <Link href="/creer" className="text-[var(--foreground)] font-medium hover:underline">Créer →</Link>
+          {usage && usage.productsLimit != null && usage.productsCount >= usage.productsLimit && (
+            <>
+              {' · '}
+              <Link href="/formules" className="text-amber-600 dark:text-amber-400 font-medium hover:underline">Limite atteinte — Passer à Business</Link>
+            </>
+          )}
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-4 mb-6">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,6 +70,7 @@ export async function GET(req: NextRequest) {
     prisma.invoice.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         status: 'paid',
         paidAt: { gte: new Date(from + 'T00:00:00.000Z'), lte: new Date(to + 'T23:59:59.999Z') },
       },
@@ -77,6 +79,7 @@ export async function GET(req: NextRequest) {
     prisma.invoice.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         status: 'paid',
         paidAt: { gte: new Date(prevFrom + 'T00:00:00.000Z'), lte: new Date(prevTo + 'T23:59:59.999Z') },
       },
@@ -85,6 +88,7 @@ export async function GET(req: NextRequest) {
     prisma.invoice.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         status: { in: ['draft', 'sent', 'pending', 'late'] },
       },
       select: { totalTTC: true },
@@ -92,6 +96,7 @@ export async function GET(req: NextRequest) {
     prisma.creditNote.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         issueDate: { gte: from, lte: to },
       },
       select: { totalTTC: true },
@@ -99,32 +104,34 @@ export async function GET(req: NextRequest) {
     prisma.creditNote.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         issueDate: { gte: prevFrom, lte: prevTo },
       },
       select: { totalTTC: true },
     }),
     prisma.expense.findMany({
-      where: { userId, date: { gte: from, lte: to } },
+      where: { userId, ...whereNotDeleted, date: { gte: from, lte: to } },
       select: { amount: true },
     }),
     prisma.expense.findMany({
-      where: { userId, date: { gte: prevFrom, lte: prevTo } },
+      where: { userId, ...whereNotDeleted, date: { gte: prevFrom, lte: prevTo } },
       select: { amount: true },
     }),
     prisma.invoice.findMany({
       where: {
         userId,
+        ...whereNotDeleted,
         status: 'paid',
         paidAt: { not: null },
       },
       select: { paidAt: true, totalTTC: true },
     }),
     prisma.expense.findMany({
-      where: { userId },
-      select: { date: true, amount: true },
+      where: { userId, ...whereNotDeleted },
+      select: { date: true, amount: true, category: true },
     }),
     prisma.creditNote.findMany({
-      where: { userId },
+      where: { userId, ...whereNotDeleted },
       select: { issueDate: true, totalTTC: true },
     }),
   ])
@@ -236,6 +243,27 @@ export async function GET(req: NextRequest) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, amount]) => ({ month, amount }))
 
+  // Dépenses par catégorie par mois (pour graphique en lignes)
+  type CategoryMonth = { month: string; label: string; [category: string]: string | number }
+  const expensesByCategoryByMonth: CategoryMonth[] = []
+  const categoryKeys = new Set<string>()
+  allExpensesForCharts.forEach((e) => categoryKeys.add(e.category))
+  for (let i = start; i <= end; i++) {
+    const y = Math.floor(i / 12)
+    const m = (i % 12) + 1
+    const month = `${y}-${String(m).padStart(2, '0')}`
+    if (!monthInRange(month)) continue
+    const row: CategoryMonth = { month, label: MONTH_LABELS[m - 1] }
+    categoryKeys.forEach((cat) => { row[cat] = 0 })
+    allExpensesForCharts.forEach((e) => {
+      if (e.date.slice(0, 7) === month) {
+        row[e.category] = (row[e.category] as number) + e.amount
+      }
+    })
+    expensesByCategoryByMonth.push(row)
+  }
+  expensesByCategoryByMonth.sort((a, b) => a.month.localeCompare(b.month))
+
   return NextResponse.json({
     from,
     to,
@@ -255,5 +283,6 @@ export async function GET(req: NextRequest) {
     revenueByYear: revenueByYearArray,
     expensesByMonth: expensesByMonthArray,
     creditNotesByMonth: creditNotesByMonthArray,
+    expensesByCategoryByMonth: expensesByCategoryByMonth,
   })
 }

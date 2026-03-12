@@ -29,6 +29,7 @@ yarn-error.log*
 
 # Prisma
 prisma/migrations/**/migration_lock.toml
+prisma/backups/
 
 # Misc
 .DS_Store

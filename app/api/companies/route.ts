@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logBillingActivity } from '@/lib/billing-activity'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,8 +11,8 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const q = (req.nextUrl.searchParams.get('q') ?? '').trim()
   const where = q
-    ? { userId: session.id, OR: [{ name: { contains: q } }, { legalName: { contains: q } }, { email: { contains: q } }] }
-    : { userId: session.id }
+    ? { userId: session.id, ...whereNotDeleted, OR: [{ name: { contains: q } }, { legalName: { contains: q } }, { email: { contains: q } }] }
+    : { userId: session.id, ...whereNotDeleted }
   const companies = await prisma.company.findMany({
     where,
     orderBy: { createdAt: 'desc' },

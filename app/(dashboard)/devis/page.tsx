@@ -147,7 +147,7 @@ export default function DevisPage() {
           <div>
             <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Informations requises</p>
             <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">{CANNOT_CREATE_MESSAGE}</p>
-            <Link href="/parametres" className="inline-block mt-2 text-sm font-medium text-amber-700 dark:text-amber-200 underline hover:no-underline">
+            <Link href="/parametres#etablissements" className="inline-block mt-2 text-sm font-medium text-amber-700 dark:text-amber-200 underline hover:no-underline">
               Remplir dans Paramètres →
             </Link>
           </div>
@@ -156,7 +156,7 @@ export default function DevisPage() {
 
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Devis</h1>
-        <p className="text-[var(--muted)] text-sm mt-1">Gérez vos devis. Pour en créer un, utilisez la catégorie &laquo;&nbsp;Créer devis / facture&nbsp;&raquo; dans le menu.</p>
+        <p className="text-[var(--muted)] text-sm mt-1">Gérez vos devis. Pour en créer un, utilisez la catégorie &laquo;&nbsp;Créer&nbsp;&raquo; dans le menu.</p>
       </div>
 
       <div className="mb-4 flex flex-col sm:flex-row gap-3">
@@ -164,7 +164,7 @@ export default function DevisPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
           <input
             type="search"
-            placeholder="Rechercher par numéro…"
+            placeholder="Rechercher (numéro, client, description, montant)…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="w-full pl-9 pr-4 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, RotateCcw } from 'lucide-react'
 
 type LogItem = {
   id: string
@@ -15,13 +15,17 @@ type LogItem = {
 
 type ChangeItem = { field: string; oldValue: string | number; newValue: string | number }
 
-const ENTITY_API: Record<string, (id: string) => string> = {
-  invoice: (id) => `/api/invoices/${id}`,
-  credit_note: (id) => `/api/credit-notes/${id}`,
-  quote: (id) => `/api/quotes/${id}`,
-  client: (id) => `/api/clients/${id}`,
-  company: (id) => `/api/companies/${id}`,
-  expense: (id) => `/api/expenses/${id}`,
+/** API qui inclut les entités supprimées (pour afficher les détails et permettre la récupération). */
+const ENTITY_DETAILS_API = '/api/activity/entity-details'
+
+const RESTORE_API_SEGMENT: Record<string, string> = {
+  company: 'companies',
+  quote: 'quotes',
+  invoice: 'invoices',
+  credit_note: 'credit-notes',
+  employee: 'employees',
+  expense: 'expenses',
+  client: 'clients',
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -103,23 +107,21 @@ function renderEntitySection(entity: Record<string, unknown>, title: string, ski
 type Props = {
   log: LogItem | null
   onClose: () => void
+  onRestore?: () => void
 }
 
-export function ActivityDetailModal({ log, onClose }: Props) {
+export function ActivityDetailModal({ log, onClose, onRestore }: Props) {
   const [entity, setEntity] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [restoring, setRestoring] = useState(false)
 
   useEffect(() => {
     if (!log?.entityId || !log.entityType) {
       setEntity(null)
       return
     }
-    const url = ENTITY_API[log.entityType]?.(log.entityId)
-    if (!url) {
-      setEntity(null)
-      return
-    }
+    const url = `${ENTITY_DETAILS_API}?entityType=${encodeURIComponent(log.entityType)}&entityId=${encodeURIComponent(log.entityId)}`
     setLoading(true)
     setError(null)
     fetch(url)
@@ -131,6 +133,28 @@ export function ActivityDetailModal({ log, onClose }: Props) {
       .catch(() => setError('Impossible de charger les détails'))
       .finally(() => setLoading(false))
   }, [log?.id, log?.entityId, log?.entityType])
+
+  const canRestore = log?.entityId && RESTORE_API_SEGMENT[log.entityType] && (log.action === 'deleted' || String(log.action).endsWith(' deleted'))
+  const handleRestore = async () => {
+    if (!log?.entityId || !onRestore) return
+    const segment = RESTORE_API_SEGMENT[log.entityType]
+    if (!segment) return
+    setRestoring(true)
+    try {
+      const res = await fetch(`/api/${segment}/${log.entityId}/restore`, { method: 'POST' })
+      if (res.ok) {
+        onRestore()
+        onClose()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error ?? 'Impossible de récupérer')
+      }
+    } catch {
+      setError('Impossible de récupérer')
+    } finally {
+      setRestoring(false)
+    }
+  }
 
   if (!log) return null
 
@@ -168,9 +192,22 @@ export function ActivityDetailModal({ log, onClose }: Props) {
 
           {loading && <p className="text-sm text-[var(--muted)]">Chargement des informations…</p>}
           {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+          {canRestore && onRestore && !loading && (
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={handleRestore}
+                disabled={restoring}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 text-sm font-medium disabled:opacity-50"
+              >
+                <RotateCcw className="w-4 h-4" />
+                {restoring ? 'Récupération…' : 'Récupérer cet élément'}
+              </button>
+            </div>
+          )}
           {!loading && !error && entity && (
             <>
-              {renderEntitySection(entity, 'Informations', ['client', 'company', 'invoice', 'lines', 'user', 'userId', 'createdAt', 'updatedAt'])}
+              {renderEntitySection(entity, 'Informations', ['client', 'company', 'invoice', 'lines', 'user', 'userId', 'createdAt', 'updatedAt', 'deletedAt'])}
               {(() => {
                 const client = entity.client as { firstName?: string; lastName?: string; companyName?: string } | null
                 if (!client || typeof client !== 'object') return null

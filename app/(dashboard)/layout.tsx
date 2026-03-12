@@ -8,6 +8,7 @@ import {
   FileText,
   Receipt,
   Users,
+  UserCircle,
   Wallet,
   Settings,
   Menu,
@@ -37,13 +38,14 @@ type NavItem = {
 const nav: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/activite', label: 'Activité', icon: Activity, businessOnly: true },
-  { href: '/creer', label: 'Créer devis / facture', icon: FilePlus2 },
+  { href: '/creer', label: 'Créer', icon: FilePlus2 },
   { href: '/factures', label: 'Factures', icon: Receipt },
   { href: '/avoirs', label: 'Avoirs', icon: RotateCcw, feature: 'creditNotes' },
   { href: '/devis', label: 'Devis', icon: FileText },
+  { href: '/depenses', label: 'Dépenses', icon: Banknote, feature: 'expenses' },
+  { href: '/salaries', label: 'Salariés', icon: UserCircle, feature: 'employees' },
   { href: '/clients', label: 'Clients', icon: Users },
   { href: '/produits', label: 'Produits', icon: Package, feature: 'products' },
-  { href: '/depenses', label: 'Dépenses', icon: Banknote, feature: 'expenses' },
   { href: '/comptabilite', label: 'Comptabilité', icon: Wallet, feature: 'accounting' },
   { href: '/formules', label: 'Formules', icon: Sparkles },
   { href: '/parametres', label: 'Paramètres', icon: Settings },
@@ -95,7 +97,7 @@ export default function DashboardLayout({
     return false
   }
   const lockTooltip = (item: NavItem) =>
-    item.businessOnly ? 'Disponible dans la formule Business.' : 'Disponible dans la formule Pro ou Business.'
+    item.feature === 'employees' || item.businessOnly ? 'Disponible dans la formule Business.' : 'Disponible dans la formule Pro ou Business.'
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { whereNotDeleted } from '@/lib/soft-delete'
 import { getBillingSettings } from '@/lib/billing-settings'
 import { generateCreditNotePDF } from '@/lib/billing-pdf'
 import { loadPdfLib } from '@/lib/load-pdf-lib'
@@ -15,7 +16,7 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const { id } = await params
   const creditNote = await prisma.creditNote.findFirst({
-    where: { id, userId: session.id },
+    where: { id, userId: session.id, ...whereNotDeleted },
     include: { client: true, company: true, invoice: { select: { number: true } }, lines: true },
   })
   if (!creditNote) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })

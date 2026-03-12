@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,13 @@ export async function GET(req: NextRequest) {
 
   const whereUserId = { userId: session.id }
   const whereBank = bankAccountId ? { ...whereUserId, bankAccountId } : whereUserId
+
+  // Période pour les dépenses (même logique que pour les factures)
+  const expenseDateWhere = month != null
+    ? { date: { startsWith: `${year}-${String(month).padStart(2, '0')}` } }
+    : from && to
+      ? { date: { gte: from.slice(0, 10), lte: to.slice(0, 10) } }
+      : { date: { startsWith: String(year) } }
 
   // Mois à inclure dans les séries : un seul mois, plage [from, to], ou toute l'année
   let monthsInRange: string[] = []
@@ -79,12 +87,14 @@ export async function GET(req: NextRequest) {
   let allCreditNotes: { issueDate: string; totalTTC: number }[] = []
   let creditNotesPeriod: { totalTTC: number }[] = []
   let overdueInvoices: { number: string; totalTTC: number; currency: string; dueDate: string | null; client: { firstName: string; lastName: string; companyName: string | null } | null; company: { name: string } | null }[] = []
+  let expensesInPeriod: { amount: number; category: string; employeeId: string | null }[] = []
 
   try {
     const result = await Promise.all([
     prisma.invoice.findMany({
       where: {
         ...whereBank,
+        ...whereNotDeleted,
         status: { not: 'cancelled' },
         ...seriesWhere,
       },
@@ -98,6 +108,7 @@ export async function GET(req: NextRequest) {
     prisma.invoice.findMany({
       where: {
         ...whereBank,
+        ...whereNotDeleted,
         status: { not: 'cancelled' },
         ...periodWhere,
       },
@@ -109,34 +120,45 @@ export async function GET(req: NextRequest) {
       },
     }),
     prisma.quote.findMany({
-      where: { ...whereBank, ...(from && to ? { issueDate: { gte: from.slice(0, 10), lte: to.slice(0, 10) } } : { issueDate: { startsWith: String(year) } }) },
+      where: { ...whereBank, ...whereNotDeleted, ...(from && to ? { issueDate: { gte: from.slice(0, 10), lte: to.slice(0, 10) } } : { issueDate: { startsWith: String(year) } }) },
       select: { issueDate: true, status: true },
     }),
     prisma.invoice.findMany({
       where: {
         ...whereBank,
+        ...whereNotDeleted,
         status: { in: ['pending', 'sent', 'late'] },
         dueDate: { not: null },
       },
       select: { totalTTC: true, dueDate: true },
     }),
     prisma.creditNote.findMany({
-      where: { ...whereBank, ...seriesWhere },
+      where: { ...whereBank, ...whereNotDeleted, ...seriesWhere },
       select: { issueDate: true, totalTTC: true },
     }),
     prisma.creditNote.findMany({
-      where: { ...whereBank, ...periodWhere },
+      where: { ...whereBank, ...whereNotDeleted, ...periodWhere },
       select: { totalTTC: true },
     }),
     prisma.invoice.findMany({
       where: {
         ...whereUserId,
+        ...whereNotDeleted,
         status: { not: 'paid' },
         dueDate: { lt: today },
       },
       select: { number: true, totalTTC: true, currency: true, dueDate: true, client: { select: { firstName: true, lastName: true, companyName: true } }, company: { select: { name: true } } },
       orderBy: { dueDate: 'asc' },
       take: 5,
+    }),
+    prisma.expense.findMany({
+      where: {
+        userId: session.id,
+        ...whereNotDeleted,
+        ...expenseDateWhere,
+        ...(bankAccountId ? { bankAccountId } : {}),
+      },
+      select: { amount: true, category: true, employeeId: true },
     }),
   ])
     allInvoices = result[0]
@@ -146,6 +168,7 @@ export async function GET(req: NextRequest) {
     allCreditNotes = result[4]
     creditNotesPeriod = result[5]
     overdueInvoices = result[6]
+    expensesInPeriod = Array.isArray(result[7]) ? result[7] : []
   } catch (e) {
     databaseError = true
     console.error('[api/stats] Database error:', e instanceof Error ? e.message : e)
@@ -214,6 +237,19 @@ export async function GET(req: NextRequest) {
     return { number: inv.number, clientName, amount: inv.totalTTC, currency: inv.currency, dueDate: inv.dueDate, overdueDays: days }
   })
 
+  const totalExpenses = expensesInPeriod.reduce((s, e) => s + e.amount, 0)
+  const expensesByCategory: Record<string, number> = {}
+  expensesInPeriod.forEach((e) => {
+    expensesByCategory[e.category] = (expensesByCategory[e.category] ?? 0) + e.amount
+  })
+  const expensesByEmployee: Record<string, number> = {}
+  expensesInPeriod.forEach((e) => {
+    if (e.employeeId) expensesByEmployee[e.employeeId] = (expensesByEmployee[e.employeeId] ?? 0) + e.amount
+  })
+  const salaryExpenses = expensesInPeriod.filter((e) => e.category === 'Salaires')
+  const totalEmployeeCost = salaryExpenses.reduce((s, e) => s + e.amount, 0)
+  const monthlySalaryTotal = month != null ? totalEmployeeCost : totalEmployeeCost / Math.max(1, 12)
+
   return NextResponse.json({
     year,
     month: month ?? null,
@@ -232,5 +268,10 @@ export async function GET(req: NextRequest) {
     series,
     overdueInvoices: overdueWithDays,
     databaseError,
+    totalExpenses,
+    expensesByCategory,
+    expensesByEmployee,
+    totalEmployeeCost,
+    monthlySalaryTotal,
   })
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { whereNotDeleted } from '@/lib/soft-delete'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,20 +25,22 @@ export async function GET(req: NextRequest) {
     prisma.invoice.findMany({
       where: {
         userId: session.id,
+        ...whereNotDeleted,
         status: 'paid',
         paidAt: { gte: new Date(from + 'T00:00:00.000Z'), lte: new Date(to + 'T23:59:59.999Z') },
       },
       include: { client: true, company: true },
     }),
     prisma.creditNote.findMany({
-      where: { userId: session.id, issueDate: { gte: from.slice(0, 10), lte: to } },
+      where: { userId: session.id, ...whereNotDeleted, issueDate: { gte: from.slice(0, 10), lte: to } },
     }),
     prisma.expense.findMany({
-      where: { userId: session.id, date: { gte: from.slice(0, 10), lte: to } },
+      where: { userId: session.id, ...whereNotDeleted, date: { gte: from.slice(0, 10), lte: to } },
     }),
     prisma.invoice.findMany({
       where: {
         userId: session.id,
+        ...whereNotDeleted,
         issueDate: { gte: from.slice(0, 10), lte: to.slice(0, 10) },
         status: { not: 'cancelled' },
       },
