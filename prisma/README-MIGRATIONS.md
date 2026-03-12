@@ -33,24 +33,39 @@ PG_DUMP_PATH=/opt/homebrew/opt/postgresql@17/bin/pg_dump
   ```
   Adapte le nom du fichier et l’utilisateur. Sur macOS/Linux, tu peux utiliser `PGPASSWORD=xxx pg_restore ...` si besoin.
 
-## Sauvegardes à intervalle régulier (cron)
+## Sauvegardes automatiques toutes les 6 h
 
-Pour sauvegarder la base automatiquement à intervalles réguliers sur ton Mac :
+Deux options selon où tourne l’app :
 
-1. Ouvre la crontab : `crontab -e`
-2. Ajoute une des lignes ci‑dessous (remplace `CHEMIN_VERS_FACTURATION` par le chemin réel du projet, ex. `/Users/tonuser/Desktop/Site Web/Facturation` ; pour l’obtenir, va dans le projet et tape `pwd`).
+### Option 1 : Crontab (recommandé — Mac ou serveur)
 
-**Toutes les 6 heures :**
+Sur la machine qui a accès à la BDD et à `pg_dump` :
+
+1. Rends le script exécutable une fois : `chmod +x scripts/backup-db-cron.sh`
+2. Ouvre la crontab : `crontab -e`
+3. Ajoute une ligne (remplace `CHEMIN_VERS_FACTURATION` par le chemin réel du projet, ex. `/Users/tonuser/Desktop/Site Web/Facturation` ; pour l’obtenir : `cd` dans le projet puis `pwd`).
+
+**Toutes les 6 heures (0h, 6h, 12h, 18h) :**
 ```cron
-0 */6 * * * CHEMIN_VERS_FACTURATION/scripts/backup-db-cron.sh >> /tmp/db-backup.log 2>&1
+0 */6 * * * /CHEMIN_VERS_FACTURATION/scripts/backup-db-cron.sh >> /tmp/db-backup.log 2>&1
 ```
 
 **Une fois par jour à 8 h :**
 ```cron
-0 8 * * * CHEMIN_VERS_FACTURATION/scripts/backup-db-cron.sh >> /tmp/db-backup.log 2>&1
+0 8 * * * /CHEMIN_VERS_FACTURATION/scripts/backup-db-cron.sh >> /tmp/db-backup.log 2>&1
 ```
 
-Le script `scripts/backup-db-cron.sh` se place dans le projet et lance `npm run db:backup`. Les sauvegardes vont dans `prisma/backups/` (30 derniers conservés). Les erreurs et la sortie sont dans `/tmp/db-backup.log` si tu rediriges comme ci‑dessus. Si le chemin contient des espaces (ex. `Site Web`), mets‑le entre guillemets dans la crontab.
+Si le chemin contient des espaces (ex. `Site Web`), mets‑le entre guillemets dans la crontab.
+
+### Option 2 : Cron HTTP (Vercel ou autre)
+
+Le projet contient une route **GET/POST `/api/cron/backup-db`** (protégée par `CRON_SECRET` / `VERCEL_CRON_SECRET`). Elle est planifiée dans `vercel.json` toutes les 6 h (`0 */6 * * *`).
+
+Sur **Vercel serverless**, cette route échouera (pas de `pg_dump`, pas de disque persistant). Pour des backups automatiques avec Vercel, utilise l’**option 1** (crontab sur ton Mac ou un petit serveur qui a accès à la BDD).
+
+Si tu héberges l’app sur un serveur Node avec disque et `pg_dump`, le cron Vercel (ou un service type cron-job.org) peut appeler cette URL toutes les 6 h.
+
+Les sauvegardes sont dans `prisma/backups/` (30 derniers conservés). Logs possibles dans `/tmp/db-backup.log` avec l’option 1.
 
 ## Commandes utiles
 
