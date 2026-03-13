@@ -3,6 +3,7 @@ import { ThemeToggle } from './theme-toggle'
 import {
   Check,
   FileText,
+  FileCheck,
   Download,
   Users,
   BarChart3,
@@ -13,7 +14,6 @@ import {
   FolderOpen,
   LayoutGrid,
   UserPlus,
-  FileCheck,
 } from 'lucide-react'
 
 export default function HomePage() {
@@ -68,11 +68,15 @@ export default function HomePage() {
               </span>
               <span className="inline-flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                Factures électroniques conformes (Factur-X / EN16931)
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
                 Gratuit pour commencer
               </span>
               <span className="inline-flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                Configuration en moins de 2 minutes
+                TPE, auto-entrepreneurs, associations, particuliers
               </span>
             </div>
           </div>
@@ -156,6 +160,7 @@ export default function HomePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {[
                 { icon: FileText, title: 'Création de devis et factures', desc: 'Créez des documents professionnels en quelques secondes.' },
+                { icon: FileCheck, title: 'Factures électroniques conformes', desc: 'Factur-X / EN16931 : factures et avoirs conformes, reconnus électroniquement. Inclus gratuit ou payant.' },
                 { icon: Download, title: 'Génération PDF automatique', desc: 'Téléchargez et envoyez vos factures instantanément.' },
                 { icon: Users, title: 'Gestion des clients', desc: 'Centralisez toutes les informations de vos clients.' },
                 { icon: BarChart3, title: 'Tableau de bord clair', desc: 'Suivez votre chiffre d\'affaires et votre activité.' },
@@ -214,7 +219,7 @@ export default function HomePage() {
               Myfacturation est conçu pour les professionnels qui veulent gérer leur facturation rapidement sans complexité.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
-              {['Freelances', 'Auto-entrepreneurs', 'Consultants', 'Agences', 'Petites entreprises'].map((label) => (
+              {['Auto-entrepreneurs', 'TPE', 'Associations', 'Particuliers', 'Freelances', 'Consultants', 'Agences'].map((label) => (
                 <span
                   key={label}
                   className="px-5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm font-medium"

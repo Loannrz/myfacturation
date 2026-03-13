@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { whereNotDeleted } from '@/lib/soft-delete'
 import { getBillingSettings } from '@/lib/billing-settings'
 import { generateQuotePDF } from '@/lib/billing-pdf'
-import { loadPdfLib } from '@/lib/load-pdf-lib'
+import { loadPdfBillingResources } from '@/lib/load-pdf-billing'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,8 +21,8 @@ export async function GET(
   })
   if (!quote) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
   const settings = await getBillingSettings(session.id)
-  const pdfLib = await loadPdfLib()
-  const pdf = await generateQuotePDF(quote, settings, pdfLib)
+  const { pdfLib, resources } = loadPdfBillingResources()
+  const pdf = await generateQuotePDF(quote, settings, pdfLib, resources)
   const filename = `devis-${quote.number}.pdf`.replace(/[^\w.\-]/g, '_')
   return new NextResponse(new Uint8Array(pdf), {
     headers: {

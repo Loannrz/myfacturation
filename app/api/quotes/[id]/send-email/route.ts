@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { whereNotDeleted } from '@/lib/soft-delete'
 import { getBillingSettings } from '@/lib/billing-settings'
 import { generateQuotePDF } from '@/lib/billing-pdf'
-import { loadPdfLib } from '@/lib/load-pdf-lib'
+import { loadPdfBillingResources } from '@/lib/load-pdf-billing'
 import { sendMail } from '@/lib/smtp'
 import { logBillingActivity } from '@/lib/billing-activity'
 import { buildBillingEmailHtml } from '@/lib/billing-email-template'
@@ -47,8 +47,8 @@ export async function POST(
     return NextResponse.json({ error: 'Aucune adresse email pour ce client/société' }, { status: 400 })
   }
   const settings = await getBillingSettings(session.id)
-  const pdfLib = await loadPdfLib()
-  const pdf = await generateQuotePDF(quote, settings, pdfLib)
+  const { pdfLib, resources } = loadPdfBillingResources()
+  const pdf = await generateQuotePDF(quote, settings, pdfLib, resources)
   const companyName = settings.companyName || 'Myfacturation'
   const amountStr = `${quote.totalTTC.toFixed(2)} ${quote.currency}`
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || ''

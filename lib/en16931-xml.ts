@@ -112,8 +112,8 @@ export interface DocumentData {
   creditNoteReason?: string
 }
 
-/** URN Guideline acceptée par la codedb Factur-X EN16931 (BT-24). */
-const GUIDELINE_ID_EN16931 = 'urn:factur-x.eu:1p0:en16931'
+/** URN Guideline exigée par le validateur (BT-24). */
+const GUIDELINE_ID_EN16931 = 'urn:cen.eu:en16931:2017'
 
 /** Génère le XML EN16931 (CII) conforme Factur-X : Guideline officielle, SIREN, BT-34/BT-49 avec schemeID EM. */
 export function buildEN16931XML(data: DocumentData): string {
@@ -159,7 +159,7 @@ export function buildEN16931XML(data: DocumentData): string {
   parts.push('<ram:CityName>' + esc(data.seller.city) + '</ram:CityName>')
   parts.push('<ram:CountryID>' + esc(countryToIso2(data.seller.country)) + '</ram:CountryID>')
   parts.push('</ram:PostalTradeAddress>')
-  parts.push('<ram:SpecifiedLegalOrganization><ram:ID>' + esc(sellerSiren) + '</ram:ID></ram:SpecifiedLegalOrganization>')
+  parts.push('<ram:SpecifiedLegalOrganization><ram:ID schemeID="0002">' + esc(sellerSiren) + '</ram:ID></ram:SpecifiedLegalOrganization>')
   if (data.seller.vatId) parts.push('<ram:SpecifiedTaxRegistration><ram:ID schemeID="VA">' + esc(data.seller.vatId) + '</ram:ID></ram:SpecifiedTaxRegistration>')
   parts.push('<ram:SpecifiedTaxRegistration><ram:ID schemeID="FC">' + esc(sellerSiren) + '</ram:ID></ram:SpecifiedTaxRegistration>')
   if (data.seller.vatExemptionReason) parts.push('<ram:SpecifiedTaxRegistration><ram:ID schemeID="VAT">' + esc(data.seller.vatExemptionReason) + '</ram:ID></ram:SpecifiedTaxRegistration>')

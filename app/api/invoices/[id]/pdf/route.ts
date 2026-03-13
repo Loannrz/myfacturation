@@ -3,10 +3,12 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBillingSettings } from '@/lib/billing-settings'
 import { generateInvoicePDF } from '@/lib/billing-pdf'
-import { loadPdfLib } from '@/lib/load-pdf-lib'
+import { loadPdfBillingResources } from '@/lib/load-pdf-billing'
 import { whereNotDeleted } from '@/lib/soft-delete'
 import { buildDocumentDataFromInvoice } from '@/lib/en16931-xml'
 import { embedFacturXInPdf } from '@/lib/factur-x-embed'
+import { addPdfAEnhancements } from '@/lib/pdfa-postprocess'
+import { signPdfIfConfigured } from '@/lib/pdf-sign'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,8 +33,8 @@ export async function GET(
       { status: 400 }
     )
   }
-  const pdfLib = await loadPdfLib()
-  const pdfBuffer = await generateInvoicePDF(invoice, settings, pdfLib)
+  const { pdfLib, resources } = loadPdfBillingResources()
+  const pdfBuffer = await generateInvoicePDF(invoice, settings, pdfLib, resources)
   let pdfWithXml: Buffer
   try {
     pdfWithXml = await embedFacturXInPdf(pdfBuffer, documentData)
@@ -43,12 +45,20 @@ export async function GET(
       { status: 500 }
     )
   }
+  let pdfFinal: Buffer
+  try {
+    pdfFinal = await addPdfAEnhancements(pdfLib, pdfWithXml)
+  } catch (err) {
+    console.error('[invoice pdf] addPdfAEnhancements failed:', err)
+    pdfFinal = pdfWithXml
+  }
+  pdfFinal = await signPdfIfConfigured(pdfFinal)
   const filename = `facture-${invoice.number}.pdf`.replace(/[^\w.\-]/g, '_')
-  return new NextResponse(new Uint8Array(pdfWithXml), {
+  return new NextResponse(new Uint8Array(pdfFinal), {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,
-      'Content-Length': String(pdfWithXml.length),
+      'Content-Length': String(pdfFinal.length),
       'Cache-Control': 'no-store, no-cache, must-revalidate',
     },
   })

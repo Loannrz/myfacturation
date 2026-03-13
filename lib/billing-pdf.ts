@@ -21,10 +21,23 @@ export type PdfLibModule = {
       addPage: (size: [number, number]) => PdfPage
       embedFont: (font: unknown) => Promise<PdfFont>
       save(): Promise<Uint8Array>
+      registerFontkit?: (fontkit: unknown) => void
+      context?: { obj: (o: unknown) => unknown; stream: (buf: Uint8Array, opts?: { Length?: number; N?: number }) => unknown; register: (o: unknown) => unknown }
+      catalog?: { set: (name: unknown, ref: unknown) => void }
     }>
   }
   StandardFonts: { Helvetica: unknown; HelveticaBold: unknown }
   rgb: (r: number, g: number, b: number) => unknown
+  PDFName?: { of: (name: string) => unknown }
+  PDFString?: { of: (s: string) => unknown }
+}
+
+/** Ressources optionnelles pour PDF/A-3B : polices embarquées + profil ICC sRGB. */
+export interface PdfBillingResources {
+  fontkit: unknown
+  fontRegular: Buffer | null
+  fontBold: Buffer | null
+  iccBuffer: Buffer | null
 }
 
 type BillingSettingsWithBank = BillingSettings & {
@@ -145,7 +158,8 @@ type InvoiceWithQuote = Invoice & {
 export async function generateInvoicePDF(
   invoice: InvoiceWithQuote,
   settings: BillingSettings,
-  pdfLib: PdfLibModule
+  pdfLib: PdfLibModule,
+  resources?: PdfBillingResources | null
 ): Promise<Buffer> {
   return generateDocumentPDF(
     'invoice',
@@ -157,16 +171,34 @@ export async function generateInvoicePDF(
     (invoice as Invoice).status,
     invoice.paidAt ?? undefined,
     invoice.quote?.number,
-    invoice.quote?.issueDate
+    invoice.quote?.issueDate,
+    undefined,
+    undefined,
+    resources
   )
 }
 
 export async function generateQuotePDF(
   quote: Quote & { lines: QuoteLine[]; client: Client | null; company: Company | null },
   settings: BillingSettings,
-  pdfLib: PdfLibModule
+  pdfLib: PdfLibModule,
+  resources?: PdfBillingResources | null
 ): Promise<Buffer> {
-  return generateDocumentPDF('quote', quote, quote.lines, settings, getRecipient(quote.client, quote.company), pdfLib, undefined, undefined, undefined)
+  return generateDocumentPDF(
+    'quote',
+    quote,
+    quote.lines,
+    settings,
+    getRecipient(quote.client, quote.company),
+    pdfLib,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    resources
+  )
 }
 
 async function generateDocumentPDF(
@@ -181,7 +213,8 @@ async function generateDocumentPDF(
   quoteNumber?: string,
   quoteIssueDate?: string,
   titleOverride?: string,
-  invoiceReference?: string
+  invoiceReference?: string,
+  resources?: PdfBillingResources | null
 ): Promise<Buffer> {
   const { PDFDocument, StandardFonts, rgb } = pdfLib
   const COLORS = buildColors(rgb)
@@ -264,8 +297,33 @@ async function generateDocumentPDF(
   const paidAtFR = paidAt ? formatDateFR(paidAt.toISOString().slice(0, 10)) : ''
 
   const docPdf = await PDFDocument.create()
-  const font = await docPdf.embedFont(StandardFonts.Helvetica)
-  const fontBold = await docPdf.embedFont(StandardFonts.HelveticaBold)
+  const usePdfA = resources?.fontkit && resources?.fontRegular && resources?.fontBold
+
+  let font: PdfFont
+  let fontBold: PdfFont
+  if (usePdfA) {
+    docPdf.registerFontkit?.(resources!.fontkit)
+    font = await docPdf.embedFont(new Uint8Array(resources!.fontRegular!))
+    fontBold = await docPdf.embedFont(new Uint8Array(resources!.fontBold!))
+  } else {
+    font = await docPdf.embedFont(StandardFonts.Helvetica)
+    fontBold = await docPdf.embedFont(StandardFonts.HelveticaBold)
+  }
+  // OutputIntent sRGB (PDF/A-3B) — appliqué à toutes les factures/avoirs dès que le profil ICC est disponible
+  if (resources?.iccBuffer && resources.iccBuffer.length > 0 && docPdf.context && docPdf.catalog && pdfLib.PDFName && pdfLib.PDFString) {
+    const PDFName = pdfLib.PDFName
+    const PDFString = pdfLib.PDFString
+    const iccStream = docPdf.context.stream(new Uint8Array(resources.iccBuffer), { Length: resources.iccBuffer.length, N: 3 })
+    const outputIntent = docPdf.context.obj({
+      Type: PDFName.of('OutputIntent'),
+      S: PDFName.of('GTS_PDFA1'),
+      OutputConditionIdentifier: PDFString.of('sRGB'),
+      Info: PDFString.of('sRGB IEC61966-2.1'),
+      DestOutputProfile: docPdf.context.register(iccStream),
+    })
+    const outputIntentRef = docPdf.context.register(outputIntent)
+    docPdf.catalog.set(PDFName.of('OutputIntents'), docPdf.context.obj([outputIntentRef]))
+  }
 
   const contentStartY = PAGE_H - MARGIN
   let page = docPdf.addPage([PAGE_W, PAGE_H])
@@ -610,7 +668,8 @@ export type CreditNoteWithRelations = CreditNote & {
 export async function generateCreditNotePDF(
   creditNote: CreditNoteWithRelations,
   settings: BillingSettings,
-  pdfLib: PdfLibModule
+  pdfLib: PdfLibModule,
+  resources?: PdfBillingResources | null
 ): Promise<Buffer> {
   const doc = {
     number: creditNote.number,
@@ -641,6 +700,7 @@ export async function generateCreditNotePDF(
     undefined,
     undefined,
     'AVOIR',
-    invoiceRef
+    invoiceRef,
+    resources
   )
 }

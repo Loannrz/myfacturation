@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { FileText, Receipt, FileMinus, AlertCircle, Info, Lock, AlertTriangle, UserCircle, Wallet } from 'lucide-react'
+import { FileText, Receipt, FileMinus, AlertCircle, Info, Lock, AlertTriangle, UserCircle, Wallet, FileCheck } from 'lucide-react'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
 import {
   AreaChart,
@@ -251,6 +251,21 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-[var(--muted)] text-sm mt-1">Vue d&apos;ensemble de votre activité</p>
+        </div>
+      </div>
+
+      {/* Factures électroniques conformes — atout du site */}
+      <div className="mb-6 p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+            <FileCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div>
+            <p className="font-semibold text-emerald-800 dark:text-emerald-200">Factures et avoirs électroniques conformes</p>
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">
+              Factur-X / EN16931 — compatibles à 100 % pour les TPE, auto-entrepreneurs, associations et particuliers. Inclus dans toutes les formules.
+            </p>
+          </div>
         </div>
       </div>
 

@@ -3,13 +3,15 @@ import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBillingSettings } from '@/lib/billing-settings'
 import { generateInvoicePDF } from '@/lib/billing-pdf'
-import { loadPdfLib } from '@/lib/load-pdf-lib'
+import { loadPdfBillingResources } from '@/lib/load-pdf-billing'
 import { sendMail } from '@/lib/smtp'
 import { logBillingActivity } from '@/lib/billing-activity'
 import { whereNotDeleted } from '@/lib/soft-delete'
 import { buildBillingEmailHtml } from '@/lib/billing-email-template'
 import { buildDocumentDataFromInvoice } from '@/lib/en16931-xml'
 import { embedFacturXInPdf } from '@/lib/factur-x-embed'
+import { addPdfAEnhancements } from '@/lib/pdfa-postprocess'
+import { signPdfIfConfigured } from '@/lib/pdf-sign'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,11 +59,11 @@ export async function POST(
       { status: 400 }
     )
   }
-  const pdfLib = await loadPdfLib()
-  const pdfBuffer = await generateInvoicePDF(invoice, settings, pdfLib)
-  let pdf: Buffer
+  const { pdfLib, resources } = loadPdfBillingResources()
+  const pdfBuffer = await generateInvoicePDF(invoice, settings, pdfLib, resources)
+  let pdfWithXml: Buffer
   try {
-    pdf = await embedFacturXInPdf(pdfBuffer, documentData)
+    pdfWithXml = await embedFacturXInPdf(pdfBuffer, documentData)
   } catch (err) {
     console.error('[invoice send-email] embedFacturXInPdf failed:', err)
     return NextResponse.json(
@@ -69,6 +71,14 @@ export async function POST(
       { status: 500 }
     )
   }
+  let pdf: Buffer
+  try {
+    pdf = await addPdfAEnhancements(pdfLib, pdfWithXml)
+  } catch (err) {
+    console.error('[invoice send-email] addPdfAEnhancements failed:', err)
+    pdf = pdfWithXml
+  }
+  pdf = await signPdfIfConfigured(pdf)
   const companyName = settings.companyName || 'Myfacturation'
   const amountStr = `${invoice.totalTTC.toFixed(2)} ${invoice.currency}`
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || ''
