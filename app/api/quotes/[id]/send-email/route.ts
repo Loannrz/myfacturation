@@ -95,6 +95,7 @@ export async function POST(
     footerAddress: settings.address,
     footerSiret: settings.siret,
     signupUrl: signupUrl || undefined,
+    tvaNonApplicable: quote.tvaNonApplicable,
   })
 
   const result = await sendMail({

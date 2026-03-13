@@ -16,6 +16,8 @@ export interface BillingEmailData {
   signatureWebsite?: string | null
   footerAddress?: string | null
   footerSiret?: string | null
+  /** Si true, afficher la mention « TVA non applicable – article 293 B du CGI » */
+  tvaNonApplicable?: boolean
 }
 
 function escapeHtml(s: string): string {
@@ -101,6 +103,7 @@ export function buildBillingEmailHtml(data: BillingEmailData): string {
                 ${escapeHtml(company)}<br />
                 ${footerAddr ? `${escapeHtml(footerAddr)}<br />` : ''}
                 ${footerSiret ? `SIRET : ${escapeHtml(footerSiret)}` : ''}
+                ${data.tvaNonApplicable ? '<br /><em>TVA non applicable – article 293 B du CGI</em>' : ''}
               </p>
             </td>
           </tr>
@@ -136,6 +139,7 @@ export interface QuoteSignLinkEmailData {
   footerSiret?: string | null
   /** URL d’inscription pour le bloc promo (ex. https://example.com/signup) */
   signupUrl?: string | null
+  tvaNonApplicable?: boolean
 }
 
 export function buildQuoteSignLinkEmailHtml(data: QuoteSignLinkEmailData): string {
@@ -203,6 +207,7 @@ export function buildQuoteSignLinkEmailHtml(data: QuoteSignLinkEmailData): strin
                 ${escapeHtml(company)}<br />
                 ${footerAddr ? `${escapeHtml(footerAddr)}<br />` : ''}
                 ${footerSiret ? `SIRET : ${escapeHtml(footerSiret)}` : ''}
+                ${data.tvaNonApplicable ? '<br /><em>TVA non applicable – article 293 B du CGI</em>' : ''}
               </p>
             </td>
           </tr>

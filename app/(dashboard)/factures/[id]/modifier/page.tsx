@@ -57,7 +57,7 @@ export default function ModifierFacturePage() {
       setCompanies(companiesList)
       setProducts(productsList)
       setBankAccounts(Array.isArray(settings?.bankAccounts) ? settings.bankAccounts : [])
-      setVatApplicable(settings?.vatApplicable !== false)
+      setVatApplicable(!invoice.tvaNonApplicable)
       const profiles = Array.isArray(settings?.emitterProfiles) ? settings.emitterProfiles : []
       setEmitterProfiles(profiles)
       setEmitterProfileId(invoice.emitterProfileId ?? (profiles[0]?.id ?? ''))
@@ -386,7 +386,7 @@ export default function ModifierFacturePage() {
 
         <div className="border border-[var(--border)] rounded-xl p-6 bg-[var(--border)]/10">
           <h2 className="text-sm font-medium text-[var(--foreground)] mb-4">Aperçu</h2>
-          <InvoiceQuotePreview type="invoice" recipientName={recipientName} issueDate={issueDate} dueDate={dueDate} paymentMethod={paymentMethod} lines={lines} />
+          <InvoiceQuotePreview type="invoice" recipientName={recipientName} issueDate={issueDate} dueDate={dueDate} paymentMethod={paymentMethod} lines={lines} tvaNonApplicable={!vatApplicable} />
         </div>
       </div>
     </div>

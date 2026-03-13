@@ -37,7 +37,13 @@ export async function PUT(
   const settings = await getBillingSettings(session.id)
   const bankAccounts = parseBankAccounts(typeof settings.bankAccounts === 'string' ? settings.bankAccounts : null)
   const emitterProfiles = parseEmitterProfiles(typeof settings.emitterProfiles === 'string' ? settings.emitterProfiles : null)
-  const vatApplicable = (settings as { vatApplicable?: boolean }).vatApplicable !== false
+  const vatApplicable = (() => {
+    if (body.emitterProfileId && emitterProfiles.length > 0) {
+      const profile = emitterProfiles.find((p) => p.id === body.emitterProfileId)
+      return profile ? !profile.vatExempt : (settings as { vatApplicable?: boolean }).vatApplicable !== false
+    }
+    return (settings as { vatApplicable?: boolean }).vatApplicable !== false
+  })()
 
   if (bankAccounts.length > 0 && !(body.bankAccountId && String(body.bankAccountId).trim())) {
     return NextResponse.json({ error: 'Veuillez sélectionner un compte bancaire pour cet avoir.' }, { status: 400 })

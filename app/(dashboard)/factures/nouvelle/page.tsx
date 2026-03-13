@@ -10,7 +10,7 @@ import { InvoiceQuotePreview } from '../../_components/InvoiceQuotePreview'
 
 type Product = { id: string; name: string; description: string; unitPrice: number; vatRate: number; discount: number }
 type BankAccount = { id: string; name: string; accountHolder: string; bankName: string; iban: string; bic: string }
-type EmitterProfile = { id: string; name: string; companyName: string; legalStatus: string; siret: string }
+type EmitterProfile = { id: string; name: string; companyName: string; legalStatus: string; siret: string; vatExempt?: boolean }
 
 export default function NouvelleFacturePage() {
   const router = useRouter()
@@ -56,6 +56,15 @@ export default function NouvelleFacturePage() {
       })
       .catch(() => setCanCreate(false))
   }, [])
+  useEffect(() => {
+    if (emitterProfileId && emitterProfiles.length > 0) {
+      const profile = emitterProfiles.find((p) => p.id === emitterProfileId)
+      setVatApplicable(profile ? !profile.vatExempt : true)
+    }
+  }, [emitterProfileId, emitterProfiles])
+  useEffect(() => {
+    setLines((l) => l.map((line) => ({ ...line, vatRate: vatApplicable ? 20 : 0 })))
+  }, [vatApplicable])
 
   useEffect(() => {
     if (canCreate !== true) return
@@ -396,17 +405,17 @@ export default function NouvelleFacturePage() {
             </div>
           </div>
           <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-2 text-sm font-medium text-[var(--muted)] pb-1">
+            <div className={`grid gap-2 text-sm font-medium text-[var(--muted)] pb-1 ${vatApplicable ? 'grid-cols-12' : 'grid-cols-11'}`}>
               <div className="col-span-4">Description</div>
               <div className="col-span-1">Qté</div>
               <div className="col-span-2">P.U.</div>
-              <div className="col-span-1">TVA %</div>
+              {vatApplicable && <div className="col-span-1">TVA %</div>}
               <div className="col-span-1">Remise %</div>
               <div className="col-span-2">Total TTC</div>
               <div className="col-span-1" />
             </div>
             {lines.map((line, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-end">
+              <div key={i} className={`grid gap-2 items-end ${vatApplicable ? 'grid-cols-12' : 'grid-cols-11'}`}>
                 <div className="col-span-4">
                   <textarea
                     value={line.description}
@@ -445,18 +454,18 @@ export default function NouvelleFacturePage() {
                     className="w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
                   />
                 </div>
-                <div className="col-span-1">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={vatApplicable ? line.vatRate : 0}
-                    onChange={(e) => vatApplicable && updateLine(i, 'vatRate', e.target.value)}
-                    readOnly={!vatApplicable}
-                    className={`w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] ${!vatApplicable ? 'opacity-70 cursor-not-allowed' : ''}`}
-                    title={!vatApplicable ? 'Entreprise non assujettie à la TVA (Paramètres)' : undefined}
-                  />
-                </div>
+                {vatApplicable && (
+                  <div className="col-span-1">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={line.vatRate}
+                      onChange={(e) => updateLine(i, 'vatRate', e.target.value)}
+                      className="w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                    />
+                  </div>
+                )}
                 <div className="col-span-1">
                   <input
                     type="number"
@@ -518,6 +527,7 @@ export default function NouvelleFacturePage() {
             dueDate={dueDate}
             paymentMethod={paymentMethod}
             lines={lines}
+            tvaNonApplicable={!vatApplicable}
           />
         </div>
       </div>

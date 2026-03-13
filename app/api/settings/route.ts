@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
-import { canAccessFeatureByPlan, maxEstablishments, maxBankAccounts } from '@/lib/subscription'
+import { canAccessFeatureByPlan, maxEstablishments, maxBankAccounts, effectiveSubscriptionPlan } from '@/lib/subscription'
 import { getBillingSettings, updateBillingSettings, parseExpenseCategories, parseBankAccounts, parseEmitterProfiles } from '@/lib/billing-settings'
 
 export const dynamic = 'force-dynamic'
@@ -32,7 +32,8 @@ export async function PUT(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   try {
     const body = await req.json()
-    const plan = (session as { user?: { subscriptionPlan?: 'starter' | 'pro' | 'business' } })?.user?.subscriptionPlan ?? 'starter'
+    const rawPlan = (session as { subscriptionPlan?: string; role?: string }).subscriptionPlan ?? 'starter'
+    const plan = effectiveSubscriptionPlan(rawPlan as 'starter' | 'pro' | 'business', (session as { role?: string }).role)
     const canEditAdvanced = canAccessFeatureByPlan(plan, 'advancedSettings')
     const maxEst = maxEstablishments(plan)
     const maxBank = maxBankAccounts(plan)

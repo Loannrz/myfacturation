@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { logBillingActivity } from '@/lib/billing-activity'
 import { whereNotDeleted } from '@/lib/soft-delete'
-import { getBillingSettings, getNextInvoiceNumber, parseBankAccounts } from '@/lib/billing-settings'
+import { getBillingSettings, getNextInvoiceNumber, parseBankAccounts, parseEmitterProfiles } from '@/lib/billing-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +35,14 @@ export async function PUT(
   const body = await req.json()
   const settings = await getBillingSettings(session.id)
   const bankAccounts = parseBankAccounts(typeof settings.bankAccounts === 'string' ? settings.bankAccounts : null)
+  const emitterProfiles = parseEmitterProfiles(typeof settings.emitterProfiles === 'string' ? settings.emitterProfiles : null)
+  const vatApplicable = (() => {
+    if (body.emitterProfileId && emitterProfiles.length > 0) {
+      const profile = emitterProfiles.find((p) => p.id === body.emitterProfileId)
+      return profile ? !profile.vatExempt : (settings as { vatApplicable?: boolean }).vatApplicable !== false
+    }
+    return (settings as { vatApplicable?: boolean }).vatApplicable !== false
+  })()
   if (bankAccounts.length > 0 && !(body.bankAccountId && String(body.bankAccountId).trim())) {
     return NextResponse.json({ error: 'Veuillez sélectionner un compte bancaire pour ce devis.' }, { status: 400 })
   }
@@ -44,12 +52,12 @@ export async function PUT(
   const lineData = lines.map((line: { type?: string; description?: string; quantity?: number; unitPrice?: number; vatRate?: number; discount?: number }) => {
     const qty = Number(line.quantity) || 1
     const unit = roundDownTo2Decimals(Number(line.unitPrice) || 0)
-    const vatRate = Number(line.vatRate) ?? 20
+    const vatRate = vatApplicable ? (Number(line.vatRate) ?? 20) : 0
     const discount = Number(line.discount) ?? 0
-    const total = (qty * unit * (1 - discount / 100)) * (1 + vatRate / 100)
     const ht = qty * unit * (1 - discount / 100)
+    const total = vatApplicable ? ht * (1 + vatRate / 100) : ht
     totalHT += ht
-    vatAmount += total - ht
+    vatAmount += vatApplicable ? total - ht : 0
     return {
       type: line.type ?? 'service',
       description: line.description ?? '',
@@ -92,7 +100,7 @@ export async function PUT(
       totalHT: newTotalHT,
       vatAmount: newVatAmount,
       totalTTC: newTotalTTC,
-      tvaNonApplicable: body.tvaNonApplicable === true,
+      tvaNonApplicable: !vatApplicable,
       lines: { create: lineData },
     },
     include: { client: true, company: true, lines: true },

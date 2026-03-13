@@ -9,7 +9,7 @@ import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { InvoiceQuotePreview } from '../../_components/InvoiceQuotePreview'
 
 type BankAccount = { id: string; name: string; accountHolder: string; bankName: string; iban: string; bic: string }
-type EmitterProfile = { id: string; name: string; companyName: string; legalStatus: string; siret: string }
+type EmitterProfile = { id: string; name: string; companyName: string; legalStatus: string; siret: string; vatExempt?: boolean }
 type InvoiceOption = { id: string; number: string }
 type Product = { id: string; name: string; description: string; unitPrice: number; vatRate: number; discount: number }
 
@@ -36,6 +36,7 @@ export default function NouvelAvoirPage() {
   const [formError, setFormError] = useState('')
   const [editingTotalAt, setEditingTotalAt] = useState<number | null>(null)
   const [editingTotalValue, setEditingTotalValue] = useState('')
+  const [vatApplicable, setVatApplicable] = useState(true)
 
   useEffect(() => {
     Promise.all([fetch('/api/me').then((r) => r.ok ? r.json() : null), fetch('/api/settings').then((r) => r.ok ? r.json() : null)])
@@ -48,6 +49,7 @@ export default function NouvelAvoirPage() {
           const profiles = Array.isArray(settings.emitterProfiles) ? settings.emitterProfiles : []
           setEmitterProfiles(profiles)
           if (profiles.length > 0) setEmitterProfileId((prev) => prev || profiles[0].id)
+          setVatApplicable(settings.vatApplicable !== false)
         } else setCanCreate(false)
       })
       .catch(() => setCanCreate(false))
@@ -63,31 +65,46 @@ export default function NouvelAvoirPage() {
     fetch('/api/products').then((r) => { if (r.ok) return r.json().then(setProducts) })
   }, [canCreate])
 
-  const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: 20, discount: 0 }])
+  const defaultVatRate = vatApplicable ? 20 : 0
+  const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: defaultVatRate, discount: 0 }])
   const addProductAsLine = (product: Product) => {
     setLines((l) => [...l, {
       description: product.name,
       quantity: 1,
       unitPrice: product.unitPrice,
-      vatRate: product.vatRate,
+      vatRate: vatApplicable ? product.vatRate : 0,
       discount: product.discount,
     }])
   }
   const removeLine = (i: number) => setLines((l) => l.filter((_, idx) => idx !== i))
   const updateLine = (i: number, field: string, value: string | number) => {
-    setLines((l) => l.map((line, idx) => (idx === i ? { ...line, [field]: value } : line)))
+    setLines((l) => l.map((line, idx) => {
+      if (idx !== i) return line
+      const next = { ...line, [field]: value }
+      if (!vatApplicable && field === 'vatRate') next.vatRate = 0
+      return next
+    }))
   }
+  useEffect(() => {
+    if (emitterProfileId && emitterProfiles.length > 0) {
+      const profile = emitterProfiles.find((p) => p.id === emitterProfileId)
+      setVatApplicable(profile ? !profile.vatExempt : true)
+    }
+  }, [emitterProfileId, emitterProfiles])
+  useEffect(() => {
+    setLines((l) => l.map((line) => ({ ...line, vatRate: vatApplicable ? 20 : 0 })))
+  }, [vatApplicable])
   const lineTotalTTC = (line: { quantity: number; unitPrice: number; vatRate: number; discount: number }) => {
     const q = Number(line.quantity) || 0
     const pu = Number(line.unitPrice) || 0
-    const vat = Number(line.vatRate) ?? 20
+    const vat = vatApplicable ? (Number(line.vatRate) ?? 20) : 0
     const rem = Number(line.discount) ?? 0
     return Math.round(q * pu * (1 - rem / 100) * (1 + vat / 100) * 100) / 100
   }
   const setLineUnitPriceFromTotal = (i: number, totalTTC: number) => {
     const line = lines[i]
     const q = Math.max(Number(line.quantity) || 1, 1)
-    const vat = Number(line.vatRate) ?? 20
+    const vat = vatApplicable ? (Number(line.vatRate) ?? 20) : 0
     const rem = Number(line.discount) ?? 0
     const denom = q * (1 - rem / 100) * (1 + vat / 100)
     const puRaw = denom ? totalTTC / denom : 0
@@ -321,17 +338,17 @@ export default function NouvelAvoirPage() {
             </div>
           </div>
           <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-2 text-sm font-medium text-[var(--muted)] pb-1">
+            <div className={`grid gap-2 text-sm font-medium text-[var(--muted)] pb-1 ${vatApplicable ? 'grid-cols-12' : 'grid-cols-11'}`}>
               <div className="col-span-4">Description</div>
               <div className="col-span-1">Qté</div>
               <div className="col-span-2">P.U.</div>
-              <div className="col-span-1">TVA %</div>
+              {vatApplicable && <div className="col-span-1">TVA %</div>}
               <div className="col-span-1">Remise %</div>
               <div className="col-span-2">Total TTC</div>
               <div className="col-span-1" />
             </div>
             {lines.map((line, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-end">
+              <div key={i} className={`grid gap-2 items-end ${vatApplicable ? 'grid-cols-12' : 'grid-cols-11'}`}>
                 <div className="col-span-4">
                   <textarea value={line.description} onChange={(e) => updateLine(i, 'description', e.target.value)} placeholder="Description" rows={1} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] resize-y min-h-[2.5rem]" />
                 </div>
@@ -341,9 +358,11 @@ export default function NouvelAvoirPage() {
                 <div className="col-span-2">
                   <input type="number" min={0} step={0.01} value={line.unitPrice || ''} onChange={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) updateLine(i, 'unitPrice', v); else updateLine(i, 'unitPrice', e.target.value) }} onBlur={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v) && v >= 0) updateLine(i, 'unitPrice', roundDownTo2Decimals(v)) }} placeholder="0" className="w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm" />
                 </div>
-                <div className="col-span-1">
-                  <input type="number" min={0} max={100} value={line.vatRate} onChange={(e) => updateLine(i, 'vatRate', e.target.value)} className="w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm" />
-                </div>
+                {vatApplicable && (
+                  <div className="col-span-1">
+                    <input type="number" min={0} max={100} value={line.vatRate} onChange={(e) => updateLine(i, 'vatRate', e.target.value)} className="w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm" />
+                  </div>
+                )}
                 <div className="col-span-1">
                   <input type="number" min={0} max={100} value={line.discount} onChange={(e) => updateLine(i, 'discount', e.target.value)} className="w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm" />
                 </div>
@@ -376,6 +395,7 @@ export default function NouvelAvoirPage() {
           issueDate={issueDate}
           paymentMethod={paymentMethod || undefined}
           lines={lines}
+          tvaNonApplicable={!vatApplicable}
         />
       </div>
     </div>

@@ -41,6 +41,7 @@ export default function ModifierAvoirPage() {
   const [bankAccountId, setBankAccountId] = useState('')
   const [editingTotalAt, setEditingTotalAt] = useState<number | null>(null)
   const [editingTotalValue, setEditingTotalValue] = useState('')
+  const [tvaNonApplicable, setTvaNonApplicable] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -76,6 +77,7 @@ export default function ModifierAvoirPage() {
       setRefundedAt(cn.refundedAt ? String(cn.refundedAt).slice(0, 10) : '')
       setPaymentMethod(cn.paymentMethod ?? '')
       setBankAccountId(cn.bankAccountId ?? '')
+      setTvaNonApplicable(!!cn.tvaNonApplicable)
       if (Array.isArray(cn.lines) && cn.lines.length > 0) {
         setLines(cn.lines.map((l: { description?: string; quantity?: number; unitPrice?: number; vatRate?: number; discount?: number }) => ({
           description: l.description ?? '',
@@ -342,7 +344,7 @@ export default function ModifierAvoirPage() {
 
       <div className="mt-8 border border-[var(--border)] rounded-xl p-6 bg-[var(--border)]/10">
         <h2 className="text-sm font-medium text-[var(--foreground)] mb-4">Aperçu en temps réel</h2>
-        <InvoiceQuotePreview type="credit_note" recipientName={recipientName} issueDate={issueDate} paymentMethod={paymentMethod || undefined} lines={lines} />
+        <InvoiceQuotePreview type="credit_note" recipientName={recipientName} issueDate={issueDate} paymentMethod={paymentMethod || undefined} lines={lines} tvaNonApplicable={tvaNonApplicable} />
       </div>
     </div>
   )

@@ -97,6 +97,7 @@ export async function POST(
     signatureWebsite: settings.website,
     footerAddress: settings.address,
     footerSiret: settings.siret,
+    tvaNonApplicable: invoice.tvaNonApplicable,
   })
   const result = await sendMail({
     to,

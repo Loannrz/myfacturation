@@ -2,29 +2,31 @@
 
 type Line = { description: string; quantity: number; unitPrice: number; vatRate: number; discount: number }
 
-function computeLineTotal(line: Line) {
+function computeLineTotal(line: Line, tvaNonApplicable: boolean) {
   const q = Number(line.quantity) || 0
   const pu = Number(line.unitPrice) || 0
-  const vat = Number(line.vatRate) ?? 0
+  const vat = tvaNonApplicable ? 0 : (Number(line.vatRate) ?? 0)
   const rem = Number(line.discount) ?? 0
   const ht = q * pu * (1 - rem / 100)
   return ht * (1 + vat / 100)
 }
 
-function computeTotals(lines: Line[]) {
+function computeTotals(lines: Line[], tvaNonApplicable: boolean) {
   let totalHT = 0
   let totalTVA = 0
   lines.forEach((line) => {
     const q = Number(line.quantity) || 0
     const pu = Number(line.unitPrice) || 0
-    const vat = Number(line.vatRate) ?? 0
+    const vat = tvaNonApplicable ? 0 : (Number(line.vatRate) ?? 0)
     const rem = Number(line.discount) ?? 0
     const ht = q * pu * (1 - rem / 100)
     totalHT += ht
-    totalTVA += ht * (vat / 100)
+    totalTVA += tvaNonApplicable ? 0 : ht * (vat / 100)
   })
   return { totalHT, totalTVA, totalTTC: totalHT + totalTVA }
 }
+
+const MENTION_TVA_293B = 'TVA non applicable – article 293 B du CGI'
 
 type Props = {
   type: 'invoice' | 'quote' | 'credit_note'
@@ -33,10 +35,12 @@ type Props = {
   dueDate?: string
   paymentMethod?: string
   lines: Line[]
+  /** Si true, pas de calcul TVA, affichage "TVA : —" et mention légale */
+  tvaNonApplicable?: boolean
 }
 
-export function InvoiceQuotePreview({ type, recipientName, issueDate, dueDate, paymentMethod, lines }: Props) {
-  const { totalHT, totalTVA, totalTTC } = computeTotals(lines)
+export function InvoiceQuotePreview({ type, recipientName, issueDate, dueDate, paymentMethod, lines, tvaNonApplicable = false }: Props) {
+  const { totalHT, totalTVA, totalTTC } = computeTotals(lines, tvaNonApplicable)
   const title = type === 'invoice' ? 'Aperçu facture' : type === 'quote' ? 'Aperçu devis' : 'Aperçu avoir'
 
   const formatDate = (d: string) => {
@@ -62,7 +66,7 @@ export function InvoiceQuotePreview({ type, recipientName, issueDate, dueDate, p
               <th className="text-right py-2 font-medium">Qté</th>
               <th className="text-right py-2 font-medium">P.U.</th>
               <th className="text-right py-2 font-medium">Remise %</th>
-              <th className="text-right py-2 font-medium">TVA %</th>
+              {!tvaNonApplicable && <th className="text-right py-2 font-medium">TVA %</th>}
               <th className="text-right py-2 font-medium">Total</th>
             </tr>
           </thead>
@@ -73,15 +77,22 @@ export function InvoiceQuotePreview({ type, recipientName, issueDate, dueDate, p
                 <td className="py-2 text-right">{line.quantity}</td>
                 <td className="py-2 text-right">{(Number(line.unitPrice) || 0).toFixed(2)} €</td>
                 <td className="py-2 text-right">{(Number(line.discount) || 0) > 0 ? `${line.discount} %` : '—'}</td>
-                <td className="py-2 text-right">{line.vatRate} %</td>
-                <td className="py-2 text-right font-medium">{computeLineTotal(line).toFixed(2)} €</td>
+                {!tvaNonApplicable && <td className="py-2 text-right">{line.vatRate} %</td>}
+                <td className="py-2 text-right font-medium">{computeLineTotal(line, tvaNonApplicable).toFixed(2)} €</td>
               </tr>
             ))}
           </tbody>
         </table>
         <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-1 text-right text-sm">
           <p>Total HT : {totalHT.toFixed(2)} €</p>
-          <p>TVA : {totalTVA.toFixed(2)} €</p>
+          {tvaNonApplicable ? (
+            <>
+              <p>TVA : —</p>
+              <p className="text-xs text-[var(--muted)] italic">{MENTION_TVA_293B}</p>
+            </>
+          ) : (
+            <p>TVA : {totalTVA.toFixed(2)} €</p>
+          )}
           <p className="font-semibold text-[var(--foreground)]">Total TTC : {totalTTC.toFixed(2)} €</p>
         </div>
       </div>

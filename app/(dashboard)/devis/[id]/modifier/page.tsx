@@ -36,6 +36,7 @@ export default function ModifierDevisPage() {
   const [status, setStatus] = useState('draft')
   const [sendingQuote, setSendingQuote] = useState(false)
   const [sendQuoteError, setSendQuoteError] = useState<string | null>(null)
+  const [tvaNonApplicable, setTvaNonApplicable] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -72,6 +73,7 @@ export default function ModifierDevisPage() {
       setPaymentMethod(quote.paymentMethod ?? '')
       setBankAccountId(quote.bankAccountId ?? '')
       setStatus(quote.status ?? 'draft')
+      setTvaNonApplicable(!!quote.tvaNonApplicable)
       if (Array.isArray(quote.lines) && quote.lines.length > 0) {
         setLines(quote.lines.map((l: { description?: string; quantity?: number; unitPrice?: number; vatRate?: number; discount?: number }) => ({
           description: l.description ?? '',
@@ -394,7 +396,7 @@ export default function ModifierDevisPage() {
 
         <div className="border border-[var(--border)] rounded-xl p-6 bg-[var(--border)]/10">
           <h2 className="text-sm font-medium text-[var(--foreground)] mb-4">Aperçu</h2>
-          <InvoiceQuotePreview type="quote" recipientName={recipientName} issueDate={issueDate} dueDate={dueDate} paymentMethod={paymentMethod} lines={lines} />
+          <InvoiceQuotePreview type="quote" recipientName={recipientName} issueDate={issueDate} dueDate={dueDate} paymentMethod={paymentMethod} lines={lines} tvaNonApplicable={tvaNonApplicable} />
         </div>
       </div>
     </div>
