@@ -258,7 +258,7 @@ export default function DashboardPage() {
       const next = new Set(prev)
       next.add(quoteId)
       try {
-        if (typeof window !== 'undefined') localStorage.setItem(DISMISSED_SIGNED_KEY, JSON.stringify([...next]))
+        if (typeof window !== 'undefined') localStorage.setItem(DISMISSED_SIGNED_KEY, JSON.stringify(Array.from(next)))
       } catch {}
       return next
     })
