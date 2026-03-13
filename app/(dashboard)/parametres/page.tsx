@@ -770,6 +770,7 @@ export default function ParametresPage() {
                   <div>
                     <label className="block text-sm text-[var(--muted)] mb-1">Email *</label>
                     <input type="email" value={ep.email ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, email: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="" />
+                    <p className="text-xs text-[var(--muted)] mt-1">Email où vous recevrez les devis signés.</p>
                   </div>
                   <div>
                     <label className="block text-sm text-[var(--muted)] mb-1">Site web</label>

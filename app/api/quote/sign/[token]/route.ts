@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { whereNotDeleted } from '@/lib/soft-delete'
-import { getBillingSettings } from '@/lib/billing-settings'
+import { getBillingSettings, parseEmitterProfiles } from '@/lib/billing-settings'
 import { generateQuotePDF } from '@/lib/billing-pdf'
 import { loadPdfBillingResources } from '@/lib/load-pdf-billing'
 import { addSignatureToQuotePdf } from '@/lib/quote-pdf-signature'
@@ -137,9 +137,20 @@ export async function POST(
   const clientName = getRecipientName(quote)
   const signedAtStr = signedAt.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
 
-  const emitterEmail = (quote.user?.email ?? '').trim()
+  const profilesList = parseEmitterProfiles(settings.emitterProfiles ?? null)
+  const emitterProfile = quote.emitterProfileId && profilesList.length > 0
+    ? profilesList.find((p) => p.id === quote.emitterProfileId)
+    : null
+  const establishmentEmail = (emitterProfile?.email ?? '').trim()
+  const userAccountEmail = (quote.user?.email ?? '').trim()
   const signerEmail = (quote.client?.email ?? quote.company?.email ?? '').trim()
-  if (emitterEmail || signerEmail) {
+
+  const toEmail = establishmentEmail || userAccountEmail
+  const ccList: string[] = []
+  if (signerEmail && signerEmail !== toEmail) ccList.push(signerEmail)
+  if (userAccountEmail && userAccountEmail !== toEmail && !ccList.includes(userAccountEmail)) ccList.push(userAccountEmail)
+
+  if (toEmail || ccList.length > 0) {
     const html = buildQuoteSignedNotificationHtml({
       clientName,
       signedAt: signedAtStr,
@@ -148,8 +159,8 @@ export async function POST(
     })
     await sendMail({
       from: process.env.QUOTE_SIGNED_EMAIL_FROM || 'noreply@myfacturation360.fr',
-      to: emitterEmail || signerEmail,
-      cc: emitterEmail && signerEmail && emitterEmail !== signerEmail ? [signerEmail] : undefined,
+      to: toEmail || ccList[0]!,
+      cc: ccList.length > 0 ? ccList : undefined,
       subject: 'Votre devis a été signé',
       html,
       action: 'quote-signed-notification',

@@ -7,11 +7,11 @@ import { createRequire } from 'module'
 const requireMod = createRequire(import.meta.url)
 
 const MARGIN = 56
-const SIGNATURE_MAX_WIDTH = 280
-const SIGNATURE_HEIGHT = 90
-const SIGNATURE_Y = 72
+const SIGNATURE_MAX_WIDTH = 340
+const SIGNATURE_HEIGHT = 115
+const SIGNER_NAME_BASELINE_Y = 62
+const SIGNATURE_Y = 78
 const SIGNER_NAME_FONT_SIZE = 10
-const SIGNER_NAME_Y_OFFSET = 8
 
 function sanitizeForPdf(text: string): string {
   return String(text)
@@ -63,9 +63,8 @@ export async function addSignatureToQuotePdf(
     width = width * ratio
   }
   const x = MARGIN
-  const y = SIGNATURE_Y
 
-  lastPage.drawImage(pngImage, { x, y, width, height })
+  lastPage.drawImage(pngImage, { x, y: SIGNATURE_Y, width, height })
 
   const nameToDraw = signerName ? sanitizeForPdf(signerName) : null
   if (nameToDraw) {
@@ -73,7 +72,7 @@ export async function addSignatureToQuotePdf(
     const color = pdfLib.rgb(0.15, 0.15, 0.15)
     lastPage.drawText(nameToDraw, {
       x: MARGIN,
-      y: y - height - SIGNER_NAME_Y_OFFSET,
+      y: SIGNER_NAME_BASELINE_Y,
       size: SIGNER_NAME_FONT_SIZE,
       font,
       color,
