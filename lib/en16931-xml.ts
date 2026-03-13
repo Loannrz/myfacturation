@@ -112,12 +112,18 @@ export interface DocumentData {
   creditNoteReason?: string
 }
 
+/** URN Guideline acceptée par la codedb Factur-X EN16931 (BT-24). */
+const GUIDELINE_ID_EN16931 = 'urn:factur-x.eu:1p0:en16931'
+
 /** Génère le XML EN16931 (CII) conforme Factur-X : Guideline officielle, SIREN, BT-34/BT-49 avec schemeID EM. */
 export function buildEN16931XML(data: DocumentData): string {
   const docType = data.documentType === 'credit_note' ? '381' : '380'
   const issueDate = dateFormat102(data.issueDate)
   const dueDate = dateFormat102(data.paymentDueDate || data.dueDate) || issueDate
   const sellerSiren = siretToSiren(data.seller.companyId)
+  if (sellerSiren.length !== 9) {
+    throw new Error('Le SIREN vendeur (9 chiffres) est obligatoire pour le PDF Factur-X. Renseignez le SIRET dans Paramètres > Facturation ou dans le profil émetteur.')
+  }
   const hasVat = data.vatAmount > 0
   const headerVatCategory = hasVat ? 'S' : 'Z'
   const headerVatRate = hasVat && data.totalHT > 0 ? (data.vatAmount / data.totalHT) * 100 : 0
@@ -128,7 +134,7 @@ export function buildEN16931XML(data: DocumentData): string {
 
   parts.push('<rsm:ExchangedDocumentContext>')
   parts.push('<ram:GuidelineSpecifiedDocumentContextParameter>')
-  parts.push('<ram:ID>urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:en16931</ram:ID>')
+  parts.push('<ram:ID>' + esc(GUIDELINE_ID_EN16931) + '</ram:ID>')
   parts.push('</ram:GuidelineSpecifiedDocumentContextParameter>')
   parts.push('</rsm:ExchangedDocumentContext>')
 
@@ -153,9 +159,9 @@ export function buildEN16931XML(data: DocumentData): string {
   parts.push('<ram:CityName>' + esc(data.seller.city) + '</ram:CityName>')
   parts.push('<ram:CountryID>' + esc(countryToIso2(data.seller.country)) + '</ram:CountryID>')
   parts.push('</ram:PostalTradeAddress>')
-  if (sellerSiren) parts.push('<ram:SpecifiedLegalOrganization><ram:ID>' + esc(sellerSiren) + '</ram:ID></ram:SpecifiedLegalOrganization>')
+  parts.push('<ram:SpecifiedLegalOrganization><ram:ID>' + esc(sellerSiren) + '</ram:ID></ram:SpecifiedLegalOrganization>')
   if (data.seller.vatId) parts.push('<ram:SpecifiedTaxRegistration><ram:ID schemeID="VA">' + esc(data.seller.vatId) + '</ram:ID></ram:SpecifiedTaxRegistration>')
-  if (sellerSiren) parts.push('<ram:SpecifiedTaxRegistration><ram:ID schemeID="FC">' + esc(sellerSiren) + '</ram:ID></ram:SpecifiedTaxRegistration>')
+  parts.push('<ram:SpecifiedTaxRegistration><ram:ID schemeID="FC">' + esc(sellerSiren) + '</ram:ID></ram:SpecifiedTaxRegistration>')
   if (data.seller.vatExemptionReason) parts.push('<ram:SpecifiedTaxRegistration><ram:ID schemeID="VAT">' + esc(data.seller.vatExemptionReason) + '</ram:ID></ram:SpecifiedTaxRegistration>')
   if (data.seller.electronicAddress) parts.push('<ram:URIUniversalCommunication><ram:URIID schemeID="EM">' + esc(data.seller.electronicAddress) + '</ram:URIID></ram:URIUniversalCommunication>')
   parts.push('</ram:SellerTradeParty>')
