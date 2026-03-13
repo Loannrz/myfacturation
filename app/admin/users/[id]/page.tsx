@@ -23,7 +23,7 @@ type UserDetail = {
 export default function AdminUserDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const id = params.id as string
+  const id = params?.id as string
   const [user, setUser] = useState<UserDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [newPassword, setNewPassword] = useState('')

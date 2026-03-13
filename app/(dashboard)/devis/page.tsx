@@ -33,6 +33,7 @@ const statusLabels: Record<string, string> = {
   sent: 'Envoyé',
   signed: 'Signé',
   expired: 'Expiré',
+  delivery_failed: 'Non délivré',
 }
 
 const statusBadgeClass: Record<string, string> = {
@@ -40,6 +41,7 @@ const statusBadgeClass: Record<string, string> = {
   sent: 'bg-blue-500/20 text-blue-600 dark:text-blue-400',
   signed: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400',
   expired: 'bg-amber-500/20 text-amber-600 dark:text-amber-400',
+  delivery_failed: 'bg-red-500/20 text-red-600 dark:text-red-400',
 }
 
 const statusFilterOptions = [
@@ -48,6 +50,7 @@ const statusFilterOptions = [
   { value: 'sent', label: 'Envoyé' },
   { value: 'signed', label: 'Signé' },
   { value: 'expired', label: 'Expiré' },
+  { value: 'delivery_failed', label: 'Non délivré' },
 ]
 
 export default function DevisPage() {
@@ -63,24 +66,35 @@ export default function DevisPage() {
   const [signedDateValue, setSignedDateValue] = useState(() => new Date().toISOString().slice(0, 10))
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [clients, setClients] = useState<{ id: string; firstName: string; lastName: string; companyName: string | null }[]>([])
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [clientFilter, setClientFilter] = useState('')
+  const [companyFilter, setCompanyFilter] = useState('')
 
   useEffect(() => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     if (statusFilter) params.set('status', statusFilter)
+    if (clientFilter) params.set('clientId', clientFilter)
+    if (companyFilter) params.set('companyId', companyFilter)
     fetch(`/api/quotes?${params}`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setQuotes)
       .finally(() => setLoading(false))
-  }, [q, statusFilter])
+  }, [q, statusFilter, clientFilter, companyFilter])
 
   useEffect(() => {
-    Promise.all([fetch('/api/me').then((r) => r.ok ? r.json() : null), fetch('/api/settings').then((r) => r.ok ? r.json() : null)])
-      .then(([me, settings]) => {
-        if (me && settings) setCanCreate(canCreateDocument({ name: me.name, ...settings }))
-        else setCanCreate(false)
-      })
-      .catch(() => setCanCreate(false))
+    Promise.all([
+      fetch('/api/me').then((r) => (r.ok ? r.json() : null)),
+      fetch('/api/settings').then((r) => (r.ok ? r.json() : null)),
+      fetch('/api/clients').then((r) => (r.ok ? r.json() : [])),
+      fetch('/api/companies').then((r) => (r.ok ? r.json() : [])),
+    ]).then(([me, settings, clientsList, companiesList]) => {
+      if (me && settings) setCanCreate(canCreateDocument({ name: me.name, ...settings }))
+      else setCanCreate(false)
+      setClients(Array.isArray(clientsList) ? clientsList : [])
+      setCompanies(Array.isArray(companiesList) ? companiesList : [])
+    }).catch(() => setCanCreate(false))
   }, [])
 
   const clientName = (quote: Quote) => {
@@ -107,6 +121,7 @@ export default function DevisPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSendError(data.error || 'L\'email n\'a pas pu être distribué. Vérifiez que l\'adresse du client est valide.')
+        setQuotes((prev) => prev.map((qu) => (qu.id === quote.id ? { ...qu, status: 'delivery_failed' } : qu)))
         return
       }
       setQuotes((prev) => prev.map((qu) => (qu.id === quote.id ? { ...qu, status: 'sent' } : qu)))
@@ -207,6 +222,37 @@ export default function DevisPage() {
             <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+        <select
+          value={companyFilter}
+          onChange={(e) => setCompanyFilter(e.target.value)}
+          className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] min-w-[180px]"
+          title="Filtrer par société"
+        >
+          <option value="">Toutes les sociétés</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <select
+          value={clientFilter}
+          onChange={(e) => setClientFilter(e.target.value)}
+          className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] min-w-[180px]"
+          title="Filtrer par client"
+        >
+          <option value="">Tous les clients</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {[c.firstName, c.lastName].filter(Boolean).join(' ') || c.companyName || c.id}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => { setQ(''); setStatusFilter(''); setCompanyFilter(''); setClientFilter('') }}
+          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors shrink-0"
+        >
+          Réinitialiser
+        </button>
       </div>
 
       {sendError && (

@@ -33,8 +33,6 @@ export async function POST(
   const signedDateStr = (body.signedDate as string) || new Date().toISOString().slice(0, 10)
   const signedAt = new Date(signedDateStr)
 
-  const refLine = `Facture venant du devis ${quote.number} émis le ${formatDateFR(quote.issueDate)} signé le ${formatDateFR(signedDateStr)}`
-
   const number = await getNextInvoiceNumber(session.id)
   const invoice = await prisma.invoice.create({
     data: {
@@ -56,17 +54,7 @@ export async function POST(
       totalTTC: quote.totalTTC,
       tvaNonApplicable: quote.tvaNonApplicable,
       lines: {
-        create: [
-          {
-            type: 'service',
-            description: refLine,
-            quantity: 1,
-            unitPrice: 0,
-            vatRate: 0,
-            discount: 0,
-            total: 0,
-          },
-          ...quote.lines.map((l) => ({
+        create: quote.lines.map((l) => ({
             type: l.type,
             description: l.description,
             quantity: l.quantity,
@@ -75,7 +63,6 @@ export async function POST(
             discount: l.discount,
             total: l.total,
           })),
-        ],
       },
     },
     include: { client: true, company: true, lines: true },

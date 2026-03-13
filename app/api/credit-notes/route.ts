@@ -15,7 +15,11 @@ export async function GET(req: NextRequest) {
 
   const q = (req.nextUrl.searchParams.get('q') ?? '').trim()
   const status = req.nextUrl.searchParams.get('status') ?? undefined
-  const where: { userId: string; deletedAt?: null; number?: { contains: string }; status?: string; OR?: Array<Record<string, unknown>> } = { userId: session.id, ...whereNotDeleted }
+  const clientIdParam = req.nextUrl.searchParams.get('clientId')?.trim() || undefined
+  const companyIdParam = req.nextUrl.searchParams.get('companyId')?.trim() || undefined
+  const where: { userId: string; deletedAt?: null; clientId?: string; companyId?: string; number?: { contains: string }; status?: string; OR?: Array<Record<string, unknown>> } = { userId: session.id, ...whereNotDeleted }
+  if (clientIdParam) where.clientId = clientIdParam
+  if (companyIdParam) where.companyId = companyIdParam
   if (status) where.status = status
   if (q) {
     const orConditions: Array<Record<string, unknown>> = [
@@ -81,6 +85,10 @@ export async function POST(req: NextRequest) {
     const lines = Array.isArray(body.lines) ? body.lines : []
     if (lines.length === 0) {
       return NextResponse.json({ error: 'Au moins une ligne est obligatoire pour l\'avoir (Factur-X / EN16931).' }, { status: 400 })
+    }
+    const lineWithEmptyDesc = lines.find((l: { description?: string }) => !(l.description != null && String(l.description).trim() !== ''))
+    if (lineWithEmptyDesc) {
+      return NextResponse.json({ error: 'Impossible de créer l\'avoir : supprimez les lignes vides (seules les lignes avec une description sont autorisées).' }, { status: 400 })
     }
     const invoice = await prisma.invoice.findFirst({
       where: { id: body.invoiceId.trim(), userId: session.id, ...whereNotDeleted },

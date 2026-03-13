@@ -47,6 +47,13 @@ export async function PUT(
     return NextResponse.json({ error: 'Veuillez sélectionner un compte bancaire pour ce devis.' }, { status: 400 })
   }
   const lines = Array.isArray(body.lines) ? body.lines : []
+  if (lines.length === 0) {
+    return NextResponse.json({ error: 'Au moins une ligne est obligatoire pour le devis.' }, { status: 400 })
+  }
+  const lineWithEmptyDescQuote = lines.find((l: { description?: string }) => !(l.description != null && String(l.description).trim() !== ''))
+  if (lineWithEmptyDescQuote) {
+    return NextResponse.json({ error: 'Impossible d\'enregistrer le devis : supprimez les lignes vides (seules les lignes avec une description sont autorisées).' }, { status: 400 })
+  }
   let totalHT = 0
   let vatAmount = 0
   const lineData = lines.map((line: { type?: string; description?: string; quantity?: number; unitPrice?: number; vatRate?: number; discount?: number }) => {

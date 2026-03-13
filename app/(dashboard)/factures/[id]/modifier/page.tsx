@@ -134,8 +134,13 @@ export default function ModifierFacturePage() {
       setFormError('La date d\'échéance est obligatoire (Factur-X / EN16931).')
       return
     }
-    if (lines.length === 0 || lines.every((l) => !(l.description && String(l.description).trim()))) {
-      setFormError('Au moins une ligne de facture avec une description est obligatoire.')
+    if (lines.length === 0) {
+      setFormError('Au moins une ligne de facture est obligatoire.')
+      return
+    }
+    const hasEmptyLine = lines.some((l) => !(l.description != null && String(l.description).trim() !== ''))
+    if (hasEmptyLine) {
+      setFormError('Impossible d\'enregistrer la facture : supprimez les lignes vides (seules les lignes avec une description sont autorisées).')
       return
     }
     setLoading(true)

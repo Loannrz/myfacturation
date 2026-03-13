@@ -206,7 +206,7 @@ model Quote {
   id               String       @id @default(cuid())
   userId           String
   number           String
-  status           String       @default("draft") // draft | sent | signed | expired
+  status           String       @default("draft") // draft | sent | signed | expired | delivery_failed
   clientId         String?
   companyId        String?
   issueDate        String

@@ -62,6 +62,10 @@ export async function PUT(
   if (lines.length === 0) {
     return NextResponse.json({ error: 'Au moins une ligne est obligatoire pour l\'avoir (Factur-X / EN16931).' }, { status: 400 })
   }
+  const lineWithEmptyDescCn = lines.find((l: { description?: string }) => !(l.description != null && String(l.description).trim() !== ''))
+  if (lineWithEmptyDescCn) {
+    return NextResponse.json({ error: 'Impossible d\'enregistrer l\'avoir : supprimez les lignes vides (seules les lignes avec une description sont autorisées).' }, { status: 400 })
+  }
 
   let totalHT = 0
   let vatAmount = 0

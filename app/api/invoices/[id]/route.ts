@@ -80,6 +80,10 @@ export async function PUT(
   if (lines.length === 0) {
     return NextResponse.json({ error: 'Au moins une ligne de facture est obligatoire (Factur-X / EN16931).' }, { status: 400 })
   }
+  const lineWithEmptyDescInv = lines.find((l: { description?: string }) => !(l.description != null && String(l.description).trim() !== ''))
+  if (lineWithEmptyDescInv) {
+    return NextResponse.json({ error: 'Impossible d\'enregistrer la facture : supprimez les lignes vides (seules les lignes avec une description sont autorisées).' }, { status: 400 })
+  }
 
   let totalHT = 0
   let vatAmount = 0

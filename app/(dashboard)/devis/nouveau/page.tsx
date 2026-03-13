@@ -147,6 +147,11 @@ export default function NouveauDevisPage() {
       setFormError('Veuillez sélectionner un compte bancaire de référence.')
       return
     }
+    const hasEmptyLine = lines.some((l) => !(l.description != null && String(l.description).trim() !== ''))
+    if (hasEmptyLine) {
+      setFormError('Impossible de créer le devis : supprimez les lignes vides (seules les lignes avec une description sont autorisées).')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch('/api/quotes', {

@@ -68,7 +68,7 @@ export default function FacturesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const urlFilter = useMemo(() => searchParams.get('filter') ?? '', [searchParams])
+  const urlFilter = useMemo(() => searchParams?.get('filter') ?? '', [searchParams])
   const [filter, setFilter] = useState(urlFilter) // Toutes | Payées | Impayées | En retard
   const [loading, setLoading] = useState(true)
   const [canCreate, setCanCreate] = useState<boolean | null>(null)
@@ -76,29 +76,40 @@ export default function FacturesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showPaidDateFor, setShowPaidDateFor] = useState<string | null>(null)
   const [paidDateValue, setPaidDateValue] = useState(() => new Date().toISOString().slice(0, 10))
+  const [clients, setClients] = useState<{ id: string; firstName: string; lastName: string; companyName: string | null }[]>([])
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [clientFilter, setClientFilter] = useState('')
+  const [companyFilter, setCompanyFilter] = useState('')
 
   useEffect(() => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     if (statusFilter) params.set('status', statusFilter)
     if (filter) params.set('filter', filter)
+    if (clientFilter) params.set('clientId', clientFilter)
+    if (companyFilter) params.set('companyId', companyFilter)
     fetch(`/api/invoices?${params}`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setInvoices)
       .finally(() => setLoading(false))
-  }, [q, statusFilter, filter])
+  }, [q, statusFilter, filter, clientFilter, companyFilter])
 
   useEffect(() => {
     setFilter(urlFilter)
   }, [urlFilter])
 
   useEffect(() => {
-    Promise.all([fetch('/api/me').then((r) => r.ok ? r.json() : null), fetch('/api/settings').then((r) => r.ok ? r.json() : null)])
-      .then(([me, settings]) => {
-        if (me && settings) setCanCreate(canCreateDocument({ name: me.name, ...settings }))
-        else setCanCreate(false)
-      })
-      .catch(() => setCanCreate(false))
+    Promise.all([
+      fetch('/api/me').then((r) => (r.ok ? r.json() : null)),
+      fetch('/api/settings').then((r) => (r.ok ? r.json() : null)),
+      fetch('/api/clients').then((r) => (r.ok ? r.json() : [])),
+      fetch('/api/companies').then((r) => (r.ok ? r.json() : [])),
+    ]).then(([me, settings, clientsList, companiesList]) => {
+      if (me && settings) setCanCreate(canCreateDocument({ name: me.name, ...settings }))
+      else setCanCreate(false)
+      setClients(Array.isArray(clientsList) ? clientsList : [])
+      setCompanies(Array.isArray(companiesList) ? companiesList : [])
+    }).catch(() => setCanCreate(false))
   }, [])
 
   const clientName = (inv: Invoice) => {
@@ -189,6 +200,37 @@ export default function FacturesPage() {
             <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+        <select
+          value={companyFilter}
+          onChange={(e) => setCompanyFilter(e.target.value)}
+          className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] min-w-[180px]"
+          title="Filtrer par société"
+        >
+          <option value="">Toutes les sociétés</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <select
+          value={clientFilter}
+          onChange={(e) => setClientFilter(e.target.value)}
+          className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] min-w-[180px]"
+          title="Filtrer par client"
+        >
+          <option value="">Tous les clients</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {[c.firstName, c.lastName].filter(Boolean).join(' ') || c.companyName || c.id}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => { setQ(''); setFilter(''); setStatusFilter(''); setCompanyFilter(''); setClientFilter('') }}
+          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors shrink-0"
+        >
+          Réinitialiser
+        </button>
       </div>
 
       <div className="border border-[var(--border)] rounded-xl overflow-hidden">

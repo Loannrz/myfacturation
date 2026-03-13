@@ -43,7 +43,7 @@ export async function POST(
   const { id } = await params
   const invoice = await prisma.invoice.findFirst({
     where: { id, userId: session.id, ...whereNotDeleted },
-    include: { client: true, company: true, lines: true },
+    include: { client: true, company: true, lines: true, quote: true },
   })
   if (!invoice) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
   const to = invoice.client?.email ?? invoice.company?.email

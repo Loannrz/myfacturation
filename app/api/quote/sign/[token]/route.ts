@@ -145,12 +145,15 @@ export async function POST(
   const userAccountEmail = (quote.user?.email ?? '').trim()
   const signerEmail = (quote.client?.email ?? quote.company?.email ?? '').trim()
 
-  const toEmail = establishmentEmail || userAccountEmail
-  const ccList: string[] = []
-  if (signerEmail && signerEmail !== toEmail) ccList.push(signerEmail)
-  if (userAccountEmail && userAccountEmail !== toEmail && !ccList.includes(userAccountEmail)) ccList.push(userAccountEmail)
+  const isNoreply = (e: string) => !e || e.toLowerCase().includes('noreply')
+  const recipients: string[] = []
+  if (establishmentEmail && !isNoreply(establishmentEmail)) recipients.push(establishmentEmail)
+  if (userAccountEmail && !isNoreply(userAccountEmail) && !recipients.includes(userAccountEmail)) recipients.push(userAccountEmail)
+  if (signerEmail && !isNoreply(signerEmail) && !recipients.includes(signerEmail)) recipients.push(signerEmail)
+  const toEmail = recipients[0]
+  const ccList = recipients.length > 1 ? recipients.slice(1) : []
 
-  if (toEmail || ccList.length > 0) {
+  if (toEmail) {
     const signupBase = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
     const signupUrl = signupBase ? `${signupBase}/signup` : ''
     const html = buildQuoteSignedNotificationHtml({
@@ -162,7 +165,7 @@ export async function POST(
     })
     await sendMail({
       from: process.env.QUOTE_SIGNED_EMAIL_FROM || 'noreply@myfacturation360.fr',
-      to: toEmail || ccList[0]!,
+      to: toEmail,
       cc: ccList.length > 0 ? ccList : undefined,
       subject: `Votre devis a été signé – ${companyName}`,
       html,

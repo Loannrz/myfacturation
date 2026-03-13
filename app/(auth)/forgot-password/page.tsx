@@ -11,8 +11,8 @@ const CODE_LENGTH = 6
 
 function ForgotPasswordForm() {
   const searchParams = useSearchParams()
-  const emailParam = searchParams.get('email') ?? ''
-  const stepParam = searchParams.get('step')
+  const emailParam = searchParams?.get('email') ?? ''
+  const stepParam = searchParams?.get('step')
 
   const [step, setStep] = useState(stepParam === '2' ? 2 : 1)
   const [email, setEmail] = useState(emailParam)

@@ -28,12 +28,18 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status') ?? undefined
   const filter = searchParams.get('filter') ?? undefined // all | paid | unpaid | overdue
   const q = (searchParams.get('q') ?? '').trim()
+  const clientIdParam = searchParams.get('clientId')?.trim() || undefined
+  const companyIdParam = searchParams.get('companyId')?.trim() || undefined
   const where: {
     userId: string
+    clientId?: string
+    companyId?: string
     status?: string | { not?: string; in?: string[] }
     dueDate?: { lt: string; not: null }
     OR?: Array<Record<string, unknown>>
   } = { userId: session.id, ...whereNotDeleted }
+  if (clientIdParam) where.clientId = clientIdParam
+  if (companyIdParam) where.companyId = companyIdParam
   if (status) where.status = status
   else if (filter === 'paid') where.status = 'paid'
   else if (filter === 'unpaid') where.status = { in: ['draft', 'sent', 'pending', 'late'] }
@@ -141,6 +147,10 @@ export async function POST(req: NextRequest) {
     const lines = Array.isArray(body.lines) ? body.lines : []
     if (lines.length === 0) {
       return NextResponse.json({ error: 'Au moins une ligne de facture est obligatoire (Factur-X / EN16931).' }, { status: 400 })
+    }
+    const lineWithEmptyDesc = lines.find((l: { description?: string }) => !(l.description != null && String(l.description).trim() !== ''))
+    if (lineWithEmptyDesc) {
+      return NextResponse.json({ error: 'Impossible de créer la facture : supprimez les lignes vides (seules les lignes avec une description sont autorisées).' }, { status: 400 })
     }
 
     const number = body.number ?? (await getNextInvoiceNumber(session.id))

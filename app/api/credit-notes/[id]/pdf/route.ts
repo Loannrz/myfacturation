@@ -21,7 +21,7 @@ export async function GET(
   const { id } = await params
   const creditNote = await prisma.creditNote.findFirst({
     where: { id, userId: session.id, ...whereNotDeleted },
-    include: { client: true, company: true, invoice: { select: { number: true } }, lines: true },
+    include: { client: true, company: true, invoice: { select: { number: true, issueDate: true } }, lines: true },
   })
   if (!creditNote) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
   const settings = await getBillingSettings(session.id)
@@ -39,10 +39,12 @@ export async function GET(
   try {
     pdfWithXml = await embedFacturXInPdf(pdfBuffer, documentData)
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
     console.error('[credit-note pdf] embedFacturXInPdf failed:', err)
+    const isValidation = message.includes('BR-CO-25') || message.includes('BR-FR-CO-05')
     return NextResponse.json(
-      { error: 'Échec de la génération du PDF Factur-X', details: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
+      { error: isValidation ? message : 'Échec de la génération du PDF Factur-X', details: message },
+      { status: isValidation ? 400 : 500 }
     )
   }
   let pdfFinal: Buffer

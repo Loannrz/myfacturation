@@ -198,8 +198,8 @@ export default function ParametresPage() {
   }, [updateSession])
 
   useEffect(() => {
-    const upgraded = searchParams.get('upgraded')
-    const resilie = searchParams.get('resilie')
+    const upgraded = searchParams?.get('upgraded')
+    const resilie = searchParams?.get('resilie')
     if (upgraded === 'pro' || upgraded === 'business') {
       setSubscriptionPlan(upgraded)
       setMessage('Formule mise à jour.')

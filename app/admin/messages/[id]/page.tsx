@@ -22,7 +22,7 @@ type Conversation = {
 
 export default function AdminMessageThreadPage() {
   const params = useParams()
-  const id = params.id as string
+  const id = params?.id as string
   const [conversation, setConversation] = useState<Conversation | null>(null)
   const [loading, setLoading] = useState(true)
   const [newMessage, setNewMessage] = useState('')

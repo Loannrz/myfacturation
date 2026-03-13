@@ -62,16 +62,32 @@ export default function AvoirsPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [showRefundedDateFor, setShowRefundedDateFor] = useState<string | null>(null)
   const [refundedDateValue, setRefundedDateValue] = useState(() => new Date().toISOString().slice(0, 10))
+  const [clients, setClients] = useState<{ id: string; firstName: string; lastName: string; companyName: string | null }[]>([])
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [clientFilter, setClientFilter] = useState('')
+  const [companyFilter, setCompanyFilter] = useState('')
 
   useEffect(() => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     if (statusFilter) params.set('status', statusFilter)
+    if (clientFilter) params.set('clientId', clientFilter)
+    if (companyFilter) params.set('companyId', companyFilter)
     fetch(`/api/credit-notes?${params}`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setCreditNotes)
       .finally(() => setLoading(false))
-  }, [q, statusFilter])
+  }, [q, statusFilter, clientFilter, companyFilter])
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/clients').then((r) => (r.ok ? r.json() : [])),
+      fetch('/api/companies').then((r) => (r.ok ? r.json() : [])),
+    ]).then(([clientsList, companiesList]) => {
+      setClients(Array.isArray(clientsList) ? clientsList : [])
+      setCompanies(Array.isArray(companiesList) ? companiesList : [])
+    })
+  }, [])
 
   const updateCreditNoteStatus = async (id: string, status: string, refundedAt?: string) => {
     setUpdatingId(id)
@@ -137,6 +153,37 @@ export default function AvoirsPage() {
             <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+        <select
+          value={companyFilter}
+          onChange={(e) => setCompanyFilter(e.target.value)}
+          className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] min-w-[180px]"
+          title="Filtrer par société"
+        >
+          <option value="">Toutes les sociétés</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <select
+          value={clientFilter}
+          onChange={(e) => setClientFilter(e.target.value)}
+          className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] min-w-[180px]"
+          title="Filtrer par client"
+        >
+          <option value="">Tous les clients</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {[c.firstName, c.lastName].filter(Boolean).join(' ') || c.companyName || c.id}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => { setQ(''); setStatusFilter(''); setCompanyFilter(''); setClientFilter('') }}
+          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors shrink-0"
+        >
+          Réinitialiser
+        </button>
       </div>
 
       {loading ? (

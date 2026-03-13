@@ -16,7 +16,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status') ?? undefined
   const q = (searchParams.get('q') ?? '').trim()
-  const where: { userId: string; deletedAt?: null; status?: string; OR?: Array<Record<string, unknown>> } = { userId: session.id, ...whereNotDeleted }
+  const clientIdParam = searchParams.get('clientId')?.trim() || undefined
+  const companyIdParam = searchParams.get('companyId')?.trim() || undefined
+  const where: { userId: string; deletedAt?: null; clientId?: string; companyId?: string; status?: string; OR?: Array<Record<string, unknown>> } = { userId: session.id, ...whereNotDeleted }
+  if (clientIdParam) where.clientId = clientIdParam
+  if (companyIdParam) where.companyId = companyIdParam
   if (status) where.status = status
   if (q) {
     const orConditions: Array<Record<string, unknown>> = [
@@ -89,6 +93,13 @@ export async function POST(req: NextRequest) {
     const number = body.number ?? (await getNextQuoteNumber(session.id))
 
     const lines = Array.isArray(body.lines) ? body.lines : []
+    if (lines.length === 0) {
+      return NextResponse.json({ error: 'Au moins une ligne est obligatoire pour le devis.' }, { status: 400 })
+    }
+    const lineWithEmptyDesc = lines.find((l: { description?: string }) => !(l.description != null && String(l.description).trim() !== ''))
+    if (lineWithEmptyDesc) {
+      return NextResponse.json({ error: 'Impossible de créer le devis : supprimez les lignes vides (seules les lignes avec une description sont autorisées).' }, { status: 400 })
+    }
     let totalHT = 0
     let vatAmount = 0
     const lineData = lines.map((line: { type?: string; description?: string; quantity?: number; unitPrice?: number; vatRate?: number; discount?: number }) => {

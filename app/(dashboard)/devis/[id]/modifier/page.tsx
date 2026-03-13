@@ -150,8 +150,19 @@ export default function ModifierDevisPage() {
     }
   }
 
+  const [formError, setFormError] = useState<string | null>(null)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setFormError(null)
+    if (lines.length === 0) {
+      setFormError('Au moins une ligne est obligatoire pour le devis.')
+      return
+    }
+    const hasEmptyLine = lines.some((l) => !(l.description != null && String(l.description).trim() !== ''))
+    if (hasEmptyLine) {
+      setFormError('Impossible d\'enregistrer le devis : supprimez les lignes vides (seules les lignes avec une description sont autorisées).')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch(`/api/quotes/${id}`, {
@@ -177,6 +188,10 @@ export default function ModifierDevisPage() {
         }),
       })
       if (res.ok) router.push(`/devis?updated=${id}`)
+      else {
+        const data = await res.json().catch(() => ({}))
+        setFormError((data as { error?: string }).error || 'Erreur lors de l\'enregistrement')
+      }
     } finally {
       setLoading(false)
     }
@@ -218,6 +233,11 @@ export default function ModifierDevisPage() {
       {sendQuoteError && (
         <div className="mb-6 p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-sm">
           {sendQuoteError}
+        </div>
+      )}
+      {formError && (
+        <div className="mb-6 p-3 rounded-lg border border-red-500/50 bg-red-500/10 text-red-800 dark:text-red-200 text-sm">
+          {formError}
         </div>
       )}
 

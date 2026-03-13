@@ -12,7 +12,7 @@ function VerifyEmailForm() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const searchParams = useSearchParams()
-  const emailParam = searchParams.get('email') ?? ''
+  const emailParam = searchParams?.get('email') ?? ''
   const [email, setEmail] = useState(emailParam)
 
   useEffect(() => {

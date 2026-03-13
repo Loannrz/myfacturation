@@ -24,6 +24,21 @@ function dateFormat102(s: string | Date | null | undefined): string {
   return `${y}${m}${day}`
 }
 
+/** Extrait le nombre de jours des conditions de paiement (ex. "30 jours" → 30). */
+function parsePaymentTermDays(paymentTerms: string | null | undefined): number | null {
+  if (!paymentTerms || !paymentTerms.trim()) return null
+  const m = paymentTerms.trim().match(/(\d+)\s*jour/i)
+  return m ? Math.max(0, parseInt(m[1]!, 10)) : null
+}
+
+/** Calcule la date d'échéance à partir de la date d'émission + X jours (format ISO YYYY-MM-DD). */
+function addDaysToDate(issueDate: string, days: number): string {
+  const d = new Date(issueDate.trim().split(/[T\s]/)[0])
+  if (Number.isNaN(d.getTime())) return ''
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 function formatAmount(n: number): string {
   return Number(n).toFixed(2)
 }
@@ -106,8 +121,10 @@ export interface DocumentData {
   legalNoteRecovery?: string
   /** BR-FR-05 : mention escompte ou son absence (AAB) */
   legalNoteDiscount?: string
-  /** Avoir uniquement */
+  /** Avoir uniquement — BR-FR-CO-05 */
   originalInvoiceNumber?: string
+  /** Avoir uniquement — BR-FR-CO-05 (format ISO YYYY-MM-DD) */
+  originalInvoiceDate?: string
   /** Avoir uniquement */
   creditNoteReason?: string
 }
@@ -115,11 +132,46 @@ export interface DocumentData {
 /** URN Guideline exigée par le validateur (BT-24). */
 const GUIDELINE_ID_EN16931 = 'urn:cen.eu:en16931:2017'
 
+/** Namespaces Factur-X / EN16931 (exacts pour les validateurs). */
+const NS_RAM = 'urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100'
+const NS_QDT = 'urn:un:unece:uncefact:data:standard:QualifiedDataType:100'
+
+/** Vérifie que le XML d'un avoir contient bien BillingReference (BR-FR-CO-05). */
+function verifyCreditNoteBillingReferenceInXml(xml: string): void {
+  const hasBillingRef = xml.includes('<ram:BillingReference>') && xml.includes('</ram:BillingReference>')
+  const hasInvoiceDocRef = xml.includes('<ram:InvoiceDocumentReference>') && xml.includes('</ram:InvoiceDocumentReference>')
+  const hasIssuerAssignedId = xml.includes('<ram:IssuerAssignedID>') && xml.includes('</ram:IssuerAssignedID>')
+  const hasFormattedIssueDate = xml.includes('<ram:FormattedIssueDateTime>') && xml.includes('format="102"')
+  const pathOrder = xml.indexOf('<rsm:SupplyChainTradeTransaction>') < xml.indexOf('<ram:ApplicableHeaderTradeSettlement>') && xml.indexOf('<ram:ApplicableHeaderTradeSettlement>') < xml.indexOf('<ram:BillingReference>')
+  if (!hasBillingRef || !hasInvoiceDocRef || !hasIssuerAssignedId || !hasFormattedIssueDate || !pathOrder) {
+    console.error('BR-FR-CO-05 BillingReference missing in final XML.')
+    throw new Error('BR-FR-CO-05 : la référence à la facture d\'origine (BillingReference) est absente ou invalide dans le XML généré.')
+  }
+}
+
 /** Génère le XML EN16931 (CII) conforme Factur-X : Guideline officielle, SIREN, BT-34/BT-49 avec schemeID EM. */
 export function buildEN16931XML(data: DocumentData): string {
   const docType = data.documentType === 'credit_note' ? '381' : '380'
   const issueDate = dateFormat102(data.issueDate)
   const dueDate = dateFormat102(data.paymentDueDate || data.dueDate) || issueDate
+
+  if (data.amountDue > 0 && !dueDate && !data.paymentTermsDescription) {
+    throw new Error('BR-CO-25 : lorsque le montant dû est positif, la date d\'échéance ou les conditions de paiement sont obligatoires. Renseignez la date d\'échéance de la facture (ou du devis d\'origine) ou des conditions de paiement (ex. "30 jours").')
+  }
+
+  if (data.documentType === 'credit_note') {
+    if (!data.originalInvoiceNumber || !String(data.originalInvoiceNumber).trim()) {
+      throw new Error('BR-FR-CO-05 : un avoir doit obligatoirement référencer la facture d\'origine (numéro de facture manquant).')
+    }
+    if (!data.originalInvoiceDate || !String(data.originalInvoiceDate).trim()) {
+      throw new Error('BR-FR-CO-05 : un avoir doit obligatoirement référencer la facture d\'origine (date de la facture manquante).')
+    }
+    const origDate102 = dateFormat102(data.originalInvoiceDate)
+    if (!origDate102) {
+      throw new Error('BR-FR-CO-05 : la date de la facture d\'origine doit être au format valide (YYYY-MM-DD).')
+    }
+  }
+
   const sellerSiren = siretToSiren(data.seller.companyId)
   if (sellerSiren.length !== 9) {
     throw new Error('Le SIREN vendeur (9 chiffres) est obligatoire pour le PDF Factur-X. Renseignez le SIRET dans Paramètres > Facturation ou dans le profil émetteur.')
@@ -130,7 +182,7 @@ export function buildEN16931XML(data: DocumentData): string {
 
   const parts: string[] = []
   parts.push('<?xml version="1.0" encoding="UTF-8"?>')
-  parts.push('<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100" xmlns:qdt="urn:un:unece:uncefact:data:standard:QualifiedDataType:100">')
+  parts.push('<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="' + NS_RAM + '" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100" xmlns:qdt="' + NS_QDT + '">')
 
   parts.push('<rsm:ExchangedDocumentContext>')
   parts.push('<ram:GuidelineSpecifiedDocumentContextParameter>')
@@ -182,6 +234,15 @@ export function buildEN16931XML(data: DocumentData): string {
   parts.push('<ram:ApplicableHeaderTradeDelivery/>')
 
   parts.push('<ram:ApplicableHeaderTradeSettlement>')
+  if (data.documentType === 'credit_note' && data.originalInvoiceNumber && data.originalInvoiceDate) {
+    const origDate102 = dateFormat102(data.originalInvoiceDate)
+    parts.push('<ram:BillingReference>')
+    parts.push('<ram:InvoiceDocumentReference>')
+    parts.push('<ram:IssuerAssignedID>' + esc(data.originalInvoiceNumber) + '</ram:IssuerAssignedID>')
+    parts.push('<ram:FormattedIssueDateTime><qdt:DateTimeString format="102">' + esc(origDate102) + '</qdt:DateTimeString></ram:FormattedIssueDateTime>')
+    parts.push('</ram:InvoiceDocumentReference>')
+    parts.push('</ram:BillingReference>')
+  }
   parts.push('<ram:InvoiceCurrencyCode>' + esc(data.currency || 'EUR') + '</ram:InvoiceCurrencyCode>')
   if (data.bank) {
     parts.push('<ram:SpecifiedTradeSettlementPaymentMeans>')
@@ -192,6 +253,11 @@ export function buildEN16931XML(data: DocumentData): string {
   }
   if (dueDate) parts.push('<ram:SpecifiedTradePaymentDueDateDateTime><udt:DateTimeString format="102">' + esc(dueDate) + '</udt:DateTimeString></ram:SpecifiedTradePaymentDueDateDateTime>')
   if (data.paymentTermsDescription) parts.push('<ram:SpecifiedTradePaymentTerms><ram:Description>' + esc(data.paymentTermsDescription) + '</ram:Description></ram:SpecifiedTradePaymentTerms>')
+  if (data.amountDue > 0 && dueDate) {
+    parts.push('<ram:SpecifiedTradePaymentTerms>')
+    parts.push('<ram:DueDateDateTime format="102">' + esc(dueDate) + '</ram:DueDateDateTime>')
+    parts.push('</ram:SpecifiedTradePaymentTerms>')
+  }
   parts.push('<ram:ApplicableTradeTax>')
   parts.push('<ram:CalculatedAmount>' + formatAmount(data.vatAmount) + '</ram:CalculatedAmount>')
   parts.push('<ram:TypeCode>VAT</ram:TypeCode>')
@@ -228,7 +294,9 @@ export function buildEN16931XML(data: DocumentData): string {
 
   parts.push('</rsm:SupplyChainTradeTransaction>')
   parts.push('</rsm:CrossIndustryInvoice>')
-  return parts.join('\n')
+  const xml = parts.join('\n')
+  if (data.documentType === 'credit_note') verifyCreditNoteBillingReferenceInXml(xml)
+  return xml
 }
 
 // ——— Construction DocumentData depuis Invoice / CreditNote + settings ———
@@ -243,6 +311,7 @@ type InvoiceLike = {
   totalTTC: number
   paymentMethod: string | null
   paymentTerms: string | null
+  quote?: { dueDate?: string | null } | null
   bankAccountId: string | null
   emitterProfileId: string | null
   tvaNonApplicable?: boolean | null
@@ -355,18 +424,26 @@ export function buildDocumentDataFromInvoice(invoice: InvoiceLike, settings: Set
   const legalNoteRecovery = (settings as { legalNoteRecovery?: string }).legalNoteRecovery ?? 'En cas de retard de paiement, des indemnités forfaitaires pour frais de recouvrement seront exigibles.'
   const legalNoteDiscount = (settings as { legalNoteDiscount?: string }).legalNoteDiscount ?? 'Aucun escompte en cas de paiement anticipé.'
 
+  const rawDueDate = invoice.dueDate ?? invoice.quote?.dueDate ?? null
+  const paymentDueDate = (() => {
+    if (rawDueDate && String(rawDueDate).trim()) return rawDueDate
+    const days = parsePaymentTermDays(invoice.paymentTerms)
+    if (days != null) return addDaysToDate(invoice.issueDate, days)
+    return null
+  })()
+
   return {
     documentType: 'invoice',
     documentNumber: invoice.number,
     issueDate: invoice.issueDate,
-    dueDate: invoice.dueDate,
+    dueDate: paymentDueDate ?? invoice.dueDate,
     currency: invoice.currency || 'EUR',
     totalHT: invoice.totalHT,
     vatAmount: invoice.vatAmount,
     totalTTC: invoice.totalTTC,
     amountDue: invoice.totalTTC,
     paymentMethod: invoice.paymentMethod ?? '',
-    paymentDueDate: invoice.dueDate,
+    paymentDueDate,
     paymentTermsDescription: invoice.paymentTerms ?? undefined,
     seller,
     buyer,
@@ -378,12 +455,20 @@ export function buildDocumentDataFromInvoice(invoice: InvoiceLike, settings: Set
   }
 }
 
-type CreditNoteLike = InvoiceLike & { invoice?: { number: string } | null; reason?: string | null }
+type CreditNoteLike = InvoiceLike & {
+  invoice?: { number: string; issueDate?: string } | null
+  reason?: string | null
+  dueDate?: string | null
+}
 
 export function buildDocumentDataFromCreditNote(creditNote: CreditNoteLike, settings: SettingsLike): DocumentData {
   const base = buildDocumentDataFromInvoice(creditNote, settings)
   base.documentType = 'credit_note'
-  base.originalInvoiceNumber = creditNote.invoice?.number
+  base.originalInvoiceNumber = creditNote.invoice?.number ?? undefined
+  base.originalInvoiceDate = creditNote.invoice?.issueDate ?? undefined
   base.creditNoteReason = creditNote.reason ?? undefined
+  const creditNoteDueDate = creditNote.dueDate ?? creditNote.invoice?.issueDate ?? null
+  base.paymentDueDate = creditNoteDueDate && String(creditNoteDueDate).trim() ? creditNoteDueDate : (base.paymentDueDate ?? creditNote.invoice?.issueDate ?? null)
+  base.dueDate = base.paymentDueDate ?? base.dueDate
   return base
 }

@@ -107,6 +107,10 @@ export async function POST(
   })
 
   if (!result.ok) {
+    await prisma.quote.update({
+      where: { id },
+      data: { status: 'delivery_failed' },
+    })
     return NextResponse.json(
       { ok: false, status: result.status, error: result.error || 'L\'email n\'a pas pu être distribué. Vérifiez que l\'adresse du client est valide.' },
       { status: 400 }

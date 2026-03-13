@@ -30,6 +30,14 @@ function getTransporter() {
   })
 }
 
+/** Exclut les adresses noreply des destinataires (To/CC) — seul l'émetteur (From) peut être noreply. */
+function filterOutNoreply(emails: (string | null | undefined)[]): string[] {
+  return emails
+    .filter((e): e is string => typeof e === 'string' && e.trim().length > 0)
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => !e.includes('noreply'))
+}
+
 export async function sendMail(options: {
   to: string | string[]
   cc?: string | string[]
@@ -47,13 +55,17 @@ export async function sendMail(options: {
       error: 'SMTP non configuré : définissez SMTP_HOST, SMTP_USER, SMTP_PASS ou SMTP_PASSWORD (SMTP_FROM optionnel, défaut = SMTP_USER)',
     }
   }
-  const toList = Array.isArray(options.to) ? options.to : [options.to]
+  const toList = filterOutNoreply(Array.isArray(options.to) ? options.to : [options.to])
+  const ccList = options.cc ? filterOutNoreply(Array.isArray(options.cc) ? options.cc : [options.cc]) : undefined
   const fromAddr = options.from || process.env.SMTP_FROM?.trim() || process.env.SMTP_USER!
+  if (toList.length === 0) {
+    return { ok: false, status: 'failed', error: 'Aucun destinataire valide (noreply exclu des destinataires).' }
+  }
   try {
     const info = await transporter.sendMail({
       from: fromAddr,
       to: toList.join(', '),
-      cc: options.cc,
+      cc: ccList && ccList.length > 0 ? ccList.join(', ') : undefined,
       subject: options.subject,
       html: options.html,
       attachments: options.attachments?.map((a) => ({

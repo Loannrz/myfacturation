@@ -441,10 +441,7 @@ async function generateDocumentPDF(
     { text: recipient.country ? sanitize(recipient.country) : '—' },
     { text: recipient.siret ? `SIRET : ${recipient.siret}` : '—' },
     ...(recipient.vatExempt
-      ? [
-          { text: 'Non assujetti à la TVA', bold: false },
-          { text: 'TVA non applicable, article 293 B du CGI', bold: false },
-        ]
+      ? [{ text: 'Non assujetti à la TVA', bold: false }]
       : recipient.vatNumber
         ? [{ text: `TVA : ${recipient.vatNumber}`, bold: false }]
         : []),
@@ -522,8 +519,18 @@ async function generateDocumentPDF(
   drawTableHeader(page, headerY)
   y -= rowH
 
+  const tableLines = (() => {
+    if (!isInvoice || !quoteNumber || lines.length === 0) return lines
+    const first = lines[0]
+    const desc = (first as InvoiceLine).description ?? (first as QuoteLine).description ?? ''
+    const total = (first as InvoiceLine).total ?? (first as QuoteLine).total
+    const unit = (first as InvoiceLine).unitPrice ?? (first as QuoteLine).unitPrice
+    if (total === 0 && (unit === 0 || unit === undefined) && String(desc).includes('devis')) return lines.slice(1)
+    return lines
+  })()
+
   let yRow = y
-  for (const line of lines) {
+  for (const line of tableLines) {
     if (yRow - rowH < MIN_Y_CONTINUE) {
       page = docPdf.addPage([PAGE_W, PAGE_H])
       yRow = PAGE_H - MARGIN - 40
@@ -563,8 +570,13 @@ async function generateDocumentPDF(
   page.drawText('Total HT', { x: totalsBoxX, y: yTot, size: 9, font, color: COLORS.secondary })
   page.drawText(totalHTStr, { x: totalsBoxX + totalsBoxW - font.widthOfTextAtSize(totalHTStr, 9), y: yTot, size: 9, font, color: COLORS.primary })
   yTot -= 18
-  if (!tvaNonApplicable) {
-    page.drawText('TVA', { x: totalsBoxX, y: yTot, size: 9, font, color: COLORS.secondary })
+  page.drawText('TVA', { x: totalsBoxX, y: yTot, size: 9, font, color: COLORS.secondary })
+  if (tvaNonApplicable) {
+    page.drawText('—', { x: totalsBoxX + totalsBoxW - font.widthOfTextAtSize('—', 9), y: yTot, size: 9, font, color: COLORS.primary })
+    yTot -= 12
+    page.drawText(sanitize(vatExemptionReasonText), { x: totalsBoxX, y: yTot, size: 7, font, color: COLORS.light })
+    yTot -= 22
+  } else {
     page.drawText(vatStr, { x: totalsBoxX + totalsBoxW - font.widthOfTextAtSize(vatStr, 9), y: yTot, size: 9, font, color: COLORS.primary })
     yTot -= 18
   }
@@ -597,10 +609,6 @@ async function generateDocumentPDF(
   if (paymentTerms) {
     page.drawText(sanitize(paymentTerms), { x: MARGIN, y: yLeftCol, size: 9, font, color: COLORS.secondary })
     yLeftCol -= 13
-  }
-  if (tvaNonApplicable) {
-    page.drawText(sanitize(vatExemptionReasonText), { x: MARGIN, y: yLeftCol, size: 8, font, color: COLORS.light })
-    yLeftCol -= 14
   }
 
   if (showBankSection && selectedBank) {
@@ -646,10 +654,6 @@ async function generateDocumentPDF(
   const legalPenalties = (s as BillingSettingsWithBank).legalPenaltiesText?.trim() || DEFAULT_LEGAL_PENALTIES
   const legalRecovery = (s as BillingSettingsWithBank).legalRecoveryFeeText?.trim() || DEFAULT_LEGAL_RECOVERY
   let legalY = footerY - 24
-  if (tvaNonApplicable) {
-    page.drawText('TVA non applicable, article 293 B du CGI', { x: MARGIN, y: legalY, size: 6, font, color: COLORS.footer })
-    legalY -= 10
-  }
   page.drawText(sanitize(legalPenalties), { x: MARGIN, y: legalY, size: 6, font, color: COLORS.footer })
   legalY -= 10
   page.drawText(sanitize(legalRecovery), { x: MARGIN, y: legalY, size: 6, font, color: COLORS.footer })

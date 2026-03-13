@@ -127,8 +127,19 @@ export default function ModifierAvoirPage() {
     ? (clients.find((c) => c.id === clientId) ? [clients.find((c) => c.id === clientId)!.firstName, clients.find((c) => c.id === clientId)!.lastName].filter(Boolean).join(' ') || clients.find((c) => c.id === clientId)!.companyName || '' : '')
     : companyId ? (companies.find((c) => c.id === companyId)?.name ?? '') : ''
 
+  const [formError, setFormError] = useState<string | null>(null)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setFormError(null)
+    if (lines.length === 0) {
+      setFormError('Au moins une ligne est obligatoire pour l\'avoir.')
+      return
+    }
+    const hasEmptyLine = lines.some((l) => !(l.description != null && String(l.description).trim() !== ''))
+    if (hasEmptyLine) {
+      setFormError('Impossible d\'enregistrer l\'avoir : supprimez les lignes vides (seules les lignes avec une description sont autorisées).')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch(`/api/credit-notes/${id}`, {
@@ -155,6 +166,10 @@ export default function ModifierAvoirPage() {
         }),
       })
       if (res.ok) router.push(`/avoirs?updated=${id}`)
+      else {
+        const data = await res.json().catch(() => ({}))
+        setFormError((data as { error?: string }).error || 'Erreur lors de l\'enregistrement')
+      }
     } finally {
       setLoading(false)
     }
@@ -182,6 +197,12 @@ export default function ModifierAvoirPage() {
       <Link href="/avoirs" className="inline-flex items-center gap-2 text-sm text-[var(--muted)] hover:text-[var(--foreground)] mb-6"><ArrowLeft className="w-4 h-4" /> Retour aux avoirs</Link>
       <h1 className="text-2xl font-semibold tracking-tight mb-2">Modifier l&apos;avoir {number}</h1>
       <p className="text-[var(--muted)] text-sm mb-8">Modifiez les informations puis enregistrez.</p>
+
+      {formError && (
+        <div className="mb-6 p-3 rounded-lg border border-red-500/50 bg-red-500/10 text-red-800 dark:text-red-200 text-sm">
+          {formError}
+        </div>
+      )}
 
       <form
         onSubmit={handleSubmit}

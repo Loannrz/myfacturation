@@ -19,7 +19,7 @@ type Product = {
 export default function ModifierProduitPage() {
   const router = useRouter()
   const params = useParams()
-  const id = params.id as string
+  const id = params?.id as string
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState('')

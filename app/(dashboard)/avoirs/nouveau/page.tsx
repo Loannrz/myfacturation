@@ -10,7 +10,7 @@ import { InvoiceQuotePreview } from '../../_components/InvoiceQuotePreview'
 
 type BankAccount = { id: string; name: string; accountHolder: string; bankName: string; iban: string; bic: string }
 type EmitterProfile = { id: string; name: string; companyName: string; legalStatus: string; siret: string; vatExempt?: boolean }
-type InvoiceOption = { id: string; number: string }
+type InvoiceOption = { id: string; number: string; recipientName: string; issueDate: string }
 type Product = { id: string; name: string; description: string; unitPrice: number; vatRate: number; discount: number }
 
 export default function NouvelAvoirPage() {
@@ -59,11 +59,35 @@ export default function NouvelAvoirPage() {
     if (canCreate !== true) return
     fetch('/api/clients').then((r) => { if (r.ok) return r.json().then(setClients) })
     fetch('/api/companies').then((r) => { if (r.ok) return r.json().then(setCompanies) })
-    fetch('/api/invoices').then((r) => {
-      if (r.ok) return r.json().then((list: { id: string; number: string }[]) => setInvoices(list.map((i) => ({ id: i.id, number: i.number }))))
-    })
     fetch('/api/products').then((r) => { if (r.ok) return r.json().then(setProducts) })
   }, [canCreate])
+
+  // Charger les factures du client/société sélectionné uniquement
+  useEffect(() => {
+    if (canCreate !== true) return
+    if (!clientId?.trim() && !companyId?.trim()) {
+      setInvoices([])
+      setInvoiceId('')
+      return
+    }
+    const params = new URLSearchParams()
+    if (clientId?.trim()) params.set('clientId', clientId.trim())
+    if (companyId?.trim()) params.set('companyId', companyId.trim())
+    fetch(`/api/invoices?${params.toString()}`).then((r) => {
+      if (!r.ok) return
+      r.json().then((list: { id: string; number: string; issueDate: string; client?: { firstName?: string; lastName?: string; companyName?: string | null } | null; company?: { name: string } | null }[]) => {
+        const options: InvoiceOption[] = list.map((inv) => {
+          const recipientName = inv.client
+            ? [inv.client.firstName, inv.client.lastName].filter(Boolean).join(' ') || inv.client.companyName || '—'
+            : inv.company?.name ?? '—'
+          const dateLabel = inv.issueDate ? new Date(inv.issueDate + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+          return { id: inv.id, number: inv.number, recipientName: String(recipientName), issueDate: dateLabel }
+        })
+        setInvoices(options)
+        setInvoiceId((prev) => (options.some((o) => o.id === prev) ? prev : ''))
+      })
+    })
+  }, [canCreate, clientId, companyId])
 
   const defaultVatRate = vatApplicable ? 20 : 0
   const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: defaultVatRate, discount: 0 }])
@@ -147,8 +171,13 @@ export default function NouvelAvoirPage() {
       setFormError('Le motif de l\'avoir est obligatoire (Factur-X / EN16931).')
       return
     }
-    if (lines.length === 0 || lines.every((l) => !(l.description && String(l.description).trim()))) {
-      setFormError('Au moins une ligne avec une description est obligatoire.')
+    if (lines.length === 0) {
+      setFormError('Au moins une ligne est obligatoire pour l\'avoir.')
+      return
+    }
+    const hasEmptyLine = lines.some((l) => !(l.description != null && String(l.description).trim() !== ''))
+    if (hasEmptyLine) {
+      setFormError('Impossible de créer l\'avoir : supprimez les lignes vides (seules les lignes avec une description sont autorisées).')
       return
     }
     setLoading(true)
@@ -270,10 +299,12 @@ export default function NouvelAvoirPage() {
             )}
             <div className="sm:col-span-2">
               <label className="block text-sm text-[var(--muted)] mb-1">Facture d&apos;origine *</label>
-              <select value={invoiceId} onChange={(e) => { setInvoiceId(e.target.value); setFormError('') }} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)]" required>
-                <option value="">— Sélectionner une facture —</option>
+              <select value={invoiceId} onChange={(e) => { setInvoiceId(e.target.value); setFormError('') }} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)]" required disabled={!clientId?.trim() && !companyId?.trim()}>
+                <option value="">
+                  {clientId?.trim() || companyId?.trim() ? '— Sélectionner une facture —' : '— Sélectionnez d\'abord un client ou une société —'}
+                </option>
                 {invoices.map((inv) => (
-                  <option key={inv.id} value={inv.id}>{inv.number}</option>
+                  <option key={inv.id} value={inv.id}>{inv.number} – {inv.recipientName} – {inv.issueDate}</option>
                 ))}
               </select>
             </div>

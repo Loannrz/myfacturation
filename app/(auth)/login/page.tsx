@@ -16,12 +16,12 @@ function LoginForm() {
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
-  const registered = searchParams.get('registered') === '1'
+  const callbackUrl = searchParams?.get('callbackUrl') || '/dashboard'
+  const registered = searchParams?.get('registered') === '1'
 
   // Afficher l'erreur venant de l'URL (ex. redirection NextAuth après échec)
   useEffect(() => {
-    const err = searchParams.get('error')
+    const err = searchParams?.get('error')
     if (err === 'CredentialsSignin' || err === 'EMAIL_NOT_VERIFIED') {
       setError(err === 'EMAIL_NOT_VERIFIED' ? EMAIL_NOT_VERIFIED_MSG : 'Email ou mot de passe incorrect. Si vous venez de créer un compte, vérifiez d\'abord votre email.')
     }
