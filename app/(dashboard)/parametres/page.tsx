@@ -8,7 +8,7 @@ import { Plus, Trash2, Sparkles, Lock, AlertCircle } from 'lucide-react'
 import { planLabel, canAccessFeatureByPlan, maxEstablishments, maxBankAccounts } from '@/lib/subscription'
 
 type BankAccountEntry = { id: string; name: string; accountHolder: string; bankName: string; iban: string; bic: string }
-type EmitterProfileEntry = { id: string; name: string; companyName: string; legalStatus: string; siret: string; vatNumber?: string; apeCode?: string; address: string; postalCode: string; city: string; country?: string; phone?: string; email?: string; website?: string }
+type EmitterProfileEntry = { id: string; name: string; companyName: string; legalStatus: string; siret: string; vatNumber?: string; vatExempt?: boolean; vatExemptionReason?: string; apeCode?: string; address: string; postalCode: string; city: string; country?: string; phone?: string; email?: string; website?: string }
 
 const PLACEHOLDER_ACCOUNT_HOLDER = 'Dupont Michel'
 
@@ -17,7 +17,7 @@ function newBankAccount(): BankAccountEntry {
 }
 
 function newEmitterProfile(): EmitterProfileEntry {
-  return { id: crypto.randomUUID(), name: '', companyName: '', legalStatus: '', siret: '', address: '', postalCode: '', city: '' }
+  return { id: crypto.randomUUID(), name: '', companyName: '', legalStatus: '', siret: '', address: '', postalCode: '', city: '', vatExempt: false }
 }
 
 const LEGAL_FORMS = [
@@ -62,6 +62,7 @@ export default function ParametresPage() {
   const [defaultPaymentTerms, setDefaultPaymentTerms] = useState('')
   const [legalPenaltiesText, setLegalPenaltiesText] = useState('')
   const [legalRecoveryFeeText, setLegalRecoveryFeeText] = useState('')
+  const [vatExemptionReasonDefault, setVatExemptionReasonDefault] = useState('TVA non applicable – article 293 B du CGI')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   /** Email du compte (affiché par défaut, mis à jour après changement d'email) */
@@ -110,8 +111,15 @@ export default function ParametresPage() {
     setAccountEmail((user.email as string) ?? '')
     setProfile({ name: (user.name as string) ?? '', email: (user.email as string) ?? '', phone: (user.phone as string) ?? '' })
     const emitters = Array.isArray(settings.emitterProfiles) ? settings.emitterProfiles : []
+    const defaultReason = (settings.vatExemptionReason as string) ?? 'TVA non applicable – article 293 B du CGI'
     if (emitters.length > 0) {
-      setEmitterProfiles(emitters.map((e: EmitterProfileEntry) => ({ ...newEmitterProfile(), ...e, id: (e.id as string) || crypto.randomUUID() })))
+      setEmitterProfiles(emitters.map((e: EmitterProfileEntry) => ({
+        ...newEmitterProfile(),
+        ...e,
+        id: (e.id as string) || crypto.randomUUID(),
+        vatExempt: e.vatExempt ?? false,
+        vatExemptionReason: e.vatExempt ? (e.vatExemptionReason ?? defaultReason) : undefined,
+      })))
     } else if (settings.companyName || settings.siret) {
       setEmitterProfiles([{ ...newEmitterProfile(), name: 'Établissement principal', companyName: (settings.companyName as string) ?? '', legalStatus: (settings.legalStatus as string) ?? '', siret: (settings.siret as string) ?? '', address: (settings.address as string) ?? '', postalCode: (settings.postalCode as string) ?? '', city: (settings.city as string) ?? '' }])
     }
@@ -132,6 +140,7 @@ export default function ParametresPage() {
     setDefaultPaymentTerms(termsMatch ?? '')
     setLegalPenaltiesText((settings.legalPenaltiesText as string) ?? '')
     setLegalRecoveryFeeText((settings.legalRecoveryFeeText as string) ?? '')
+    setVatExemptionReasonDefault((settings.vatExemptionReason as string) ?? 'TVA non applicable – article 293 B du CGI')
   }, [])
 
   useEffect(() => {
@@ -223,12 +232,14 @@ export default function ParametresPage() {
     profiles: typeof emitterProfiles,
     accounts: typeof bankAccounts,
     numberSettings?: { invoiceNumberMiddle: string; invoiceNumberFormat: string; quoteNumberMiddle: string; quoteNumberFormat: string; creditNumberMiddle: string; creditNumberFormat: string; invoicePrefix: string; quotePrefix: string; creditNotePrefix: string },
-    paymentAndLegal?: { defaultPaymentMethod: string; defaultPaymentTerms: string; legalPenaltiesText: string; legalRecoveryFeeText: string; logoUrl: string }
+    paymentAndLegal?: { defaultPaymentMethod: string; defaultPaymentTerms: string; legalPenaltiesText: string; legalRecoveryFeeText: string; logoUrl: string; vatApplicable?: boolean; vatExemptionReason?: string }
   ) => {
     const body: Record<string, unknown> = {
-      emitterProfiles: profiles.map((e) => ({ ...e, vatNumber: e.vatNumber || undefined, apeCode: e.apeCode || undefined, country: e.country || undefined, phone: e.phone || undefined, email: e.email || undefined, website: e.website || undefined })),
+      emitterProfiles: profiles.map((e) => ({ ...e, vatNumber: e.vatExempt ? undefined : (e.vatNumber || undefined), vatExempt: e.vatExempt ?? false, vatExemptionReason: e.vatExempt ? (e.vatExemptionReason || undefined) : undefined, apeCode: e.apeCode || undefined, country: e.country || undefined, phone: e.phone || undefined, email: e.email || undefined, website: e.website || undefined })),
       bankAccounts: accounts.filter((a) => a.name.trim() || a.iban.trim()),
     }
+    if (paymentAndLegal?.vatApplicable !== undefined) body.vatApplicable = paymentAndLegal.vatApplicable
+    if (paymentAndLegal?.vatExemptionReason !== undefined) body.vatExemptionReason = paymentAndLegal.vatExemptionReason || null
     if (numberSettings) {
       body.invoiceNumberMiddle = numberSettings.invoiceNumberMiddle.slice(0, 6).replace(/[^a-zA-Z0-9]/g, '')
       body.invoiceNumberFormat = numberSettings.invoiceNumberFormat
@@ -258,9 +269,52 @@ export default function ParametresPage() {
     }
   }
 
+  const validateSettingsFacturX = (): string | null => {
+    const missing: string[] = []
+    for (let i = 0; i < emitterProfiles.length; i++) {
+      const ep = emitterProfiles[i]
+      const label = emitterProfiles.length > 1 ? `Établissement ${i + 1}` : 'Établissement'
+      if (!(ep.name ?? '').trim()) missing.push(`${label} : Nom de l'établissement`)
+      if (!(ep.companyName ?? '').trim()) missing.push(`${label} : Raison sociale`)
+      if (!(ep.legalStatus ?? '').trim()) missing.push(`${label} : Forme juridique`)
+      if (!(ep.siret ?? '').trim()) missing.push(`${label} : SIRET`)
+      if (!(ep.address ?? '').trim()) missing.push(`${label} : Adresse`)
+      if (!(ep.postalCode ?? '').trim()) missing.push(`${label} : Code postal`)
+      if (!(ep.city ?? '').trim()) missing.push(`${label} : Ville`)
+      if (!(ep.country ?? '').trim()) missing.push(`${label} : Pays`)
+      if (!(ep.email ?? '').trim()) missing.push(`${label} : Email`)
+      const vatExempt = !!ep.vatExempt
+      if (!vatExempt && !(ep.vatNumber ?? '').trim()) missing.push(`${label} : N° TVA (obligatoire si assujetti)`)
+      if (vatExempt && !(ep.vatExemptionReason ?? '').trim()) missing.push(`${label} : Motif d'exonération (obligatoire si non assujetti)`)
+    }
+    let hasCompleteBank = false
+    bankAccounts.forEach((a, i) => {
+      const hasAny = (a.name ?? '').trim() || (a.accountHolder ?? '').trim() || (a.bankName ?? '').trim() || (a.iban ?? '').trim() || (a.bic ?? '').trim()
+      if (!hasAny) return
+      const label = bankAccounts.length > 1 ? `Compte ${i + 1}` : 'Compte bancaire'
+      const accountMissing: string[] = []
+      if (!(a.name ?? '').trim()) accountMissing.push('Nom du compte')
+      if (!(a.accountHolder ?? '').trim()) accountMissing.push('Titulaire')
+      if (!(a.bankName ?? '').trim()) accountMissing.push('Banque')
+      if (!(a.iban ?? '').trim()) accountMissing.push('IBAN')
+      if (!(a.bic ?? '').trim()) accountMissing.push('BIC')
+      if (accountMissing.length) missing.push(`${label} : ${accountMissing.join(', ')}`)
+      else hasCompleteBank = true
+    })
+    if (!hasCompleteBank) missing.push('Au moins un compte bancaire complet (Nom, Titulaire, Banque, IBAN, BIC)')
+    if (missing.length) return 'Champs obligatoires manquants : ' + missing.join('. ')
+    return null
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!profile) return
+    const validationError = validateSettingsFacturX()
+    if (validationError) {
+      setMessage(validationError)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     setSaving(true)
     setMessage('')
     try {
@@ -285,6 +339,8 @@ export default function ParametresPage() {
         legalPenaltiesText,
         legalRecoveryFeeText,
         logoUrl: '',
+        vatApplicable: emitterProfiles.some((p) => !p.vatExempt),
+        vatExemptionReason: emitterProfiles.find((p) => p.vatExempt)?.vatExemptionReason ?? vatExemptionReasonDefault,
       })
       setMessage('Paramètres enregistrés.')
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -296,7 +352,7 @@ export default function ParametresPage() {
   }
 
   const numSettings = () => ({ invoiceNumberMiddle, invoiceNumberFormat, quoteNumberMiddle, quoteNumberFormat, creditNumberMiddle, creditNumberFormat, invoicePrefix, quotePrefix, creditNotePrefix })
-  const payLegal = () => ({ defaultPaymentMethod, defaultPaymentTerms, legalPenaltiesText, legalRecoveryFeeText, logoUrl: '' })
+  const payLegal = () => ({ defaultPaymentMethod, defaultPaymentTerms, legalPenaltiesText, legalRecoveryFeeText, logoUrl: '', vatApplicable: emitterProfiles.some((p) => !p.vatExempt), vatExemptionReason: emitterProfiles.find((p) => p.vatExempt)?.vatExemptionReason ?? vatExemptionReasonDefault })
 
   const removeEstablishment = (ep: EmitterProfileEntry) => {
     const next = emitterProfiles.filter((e) => e.id !== ep.id)
@@ -482,7 +538,7 @@ export default function ParametresPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {message && (
-          <p className={`text-sm ${message.startsWith('Erreur') ? 'text-red-600' : 'text-green-600'}`}>
+          <p className={`text-sm ${message.startsWith('Erreur') || message.startsWith('Champs obligatoires') || message.startsWith('Veuillez') || message.startsWith('Limite') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
             {message}
           </p>
         )}
@@ -623,40 +679,40 @@ export default function ParametresPage() {
                   <button type="button" onClick={() => removeEstablishment(ep)} className="text-[var(--muted)] hover:text-red-600 p-1" title="Supprimer"><Trash2 className="w-4 h-4" /></button>
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">Nom de l&apos;établissement (ex : Siège, Agence Lyon)</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Nom de l&apos;établissement (ex : Siège, Agence Lyon) *</label>
                   <input type="text" value={ep.name} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, name: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="Siège" />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">Forme juridique</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Forme juridique *</label>
                   <select value={ep.legalStatus} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, legalStatus: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]">
                     <option value="">— Choisir —</option>
                     {LEGAL_FORMS.map((f) => (<option key={f} value={f}>{f}</option>))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">Raison sociale</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Raison sociale *</label>
                   <input type="text" value={ep.companyName} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, companyName: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="" />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">SIRET</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">SIRET *</label>
                   <input type="text" value={ep.siret} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, siret: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="123 456 789 00012" />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">Adresse</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Adresse *</label>
                   <textarea rows={2} value={ep.address} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, address: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="Numéro et nom de rue" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm text-[var(--muted)] mb-1">Code postal</label>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Code postal *</label>
                     <input type="text" value={ep.postalCode} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, postalCode: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="75001" />
                   </div>
                   <div>
-                    <label className="block text-sm text-[var(--muted)] mb-1">Ville</label>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Ville *</label>
                     <input type="text" value={ep.city} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, city: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="Paris" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">Pays</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Pays *</label>
                   <input type="text" value={ep.country ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, country: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="France" />
                 </div>
                 <div>
@@ -664,8 +720,47 @@ export default function ParametresPage() {
                   <input type="text" value={ep.apeCode ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, apeCode: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="62.01Z" />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">N° TVA (optionnel)</label>
-                  <input type="text" value={ep.vatNumber ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, vatNumber: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="FR XX XXXXXXXXX" />
+                  <p className="text-sm font-medium text-[var(--muted)] mb-2">TVA</p>
+                  <div className="flex items-center gap-4 mb-3">
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name={`vat-${ep.id}`}
+                        checked={!ep.vatExempt}
+                        onChange={() => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, vatExempt: false, vatExemptionReason: undefined } : p)))}
+                        className="rounded-full border-[var(--border)]"
+                      />
+                      <span className="text-sm">Assujetti à la TVA</span>
+                    </label>
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name={`vat-${ep.id}`}
+                        checked={!!ep.vatExempt}
+                        onChange={() => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, vatExempt: true, vatNumber: undefined, vatExemptionReason: p.vatExemptionReason ?? vatExemptionReasonDefault } : p)))}
+                        className="rounded-full border-[var(--border)]"
+                      />
+                      <span className="text-sm">Non assujetti à la TVA</span>
+                    </label>
+                  </div>
+                  {!ep.vatExempt && (
+                    <div>
+                      <label className="block text-sm text-[var(--muted)] mb-1">N° TVA intracommunautaire *</label>
+                      <input type="text" value={ep.vatNumber ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, vatNumber: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="FR XX XXXXXXXXX" />
+                    </div>
+                  )}
+                  {ep.vatExempt && (
+                    <div>
+                      <label className="block text-sm text-[var(--muted)] mb-1">Motif d&apos;exonération (affiché sur les factures / avoirs) *</label>
+                      <textarea
+                        rows={2}
+                        value={ep.vatExemptionReason ?? ''}
+                        onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, vatExemptionReason: ev.target.value } : p)))}
+                        placeholder="TVA non applicable – article 293 B du CGI"
+                        className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
@@ -673,7 +768,7 @@ export default function ParametresPage() {
                     <input type="text" value={ep.phone ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, phone: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="06 12 34 56 78" />
                   </div>
                   <div>
-                    <label className="block text-sm text-[var(--muted)] mb-1">Email</label>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Email *</label>
                     <input type="email" value={ep.email ?? ''} onChange={(ev) => setEmitterProfiles((prev) => prev.map((p) => (p.id === ep.id ? { ...p, email: ev.target.value } : p)))} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]" placeholder="" />
                   </div>
                   <div>
@@ -730,7 +825,7 @@ export default function ParametresPage() {
                   </button>
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">Nom du compte (ex : Compte pro, Compte perso)</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Nom du compte (ex : Compte pro, Compte perso) *</label>
                   <input
                     type="text"
                     value={acc.name}
@@ -740,7 +835,7 @@ export default function ParametresPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">Titulaire du compte</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Titulaire du compte *</label>
                   <input
                     type="text"
                     value={acc.accountHolder}
@@ -750,7 +845,7 @@ export default function ParametresPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-[var(--muted)] mb-1">Nom de la banque</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Nom de la banque *</label>
                   <input
                     type="text"
                     value={acc.bankName}
@@ -761,7 +856,7 @@ export default function ParametresPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm text-[var(--muted)] mb-1">IBAN</label>
+                    <label className="block text-sm text-[var(--muted)] mb-1">IBAN *</label>
                     <input
                       type="text"
                       value={acc.iban}
@@ -771,7 +866,7 @@ export default function ParametresPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-[var(--muted)] mb-1">BIC / SWIFT</label>
+                    <label className="block text-sm text-[var(--muted)] mb-1">BIC / SWIFT *</label>
                     <input
                       type="text"
                       value={acc.bic}

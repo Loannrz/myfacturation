@@ -62,8 +62,23 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         )
       }
-    } else if (!(body.email ?? '').toString().trim()) {
-      return NextResponse.json({ error: 'L’email est obligatoire.' }, { status: 400 })
+    } else {
+      const requiredParticulier: Record<string, string> = {
+        firstName: 'Prénom',
+        lastName: 'Nom',
+        email: 'Email',
+        address: 'Adresse',
+        postalCode: 'Code postal',
+        city: 'Ville',
+        country: 'Pays',
+      }
+      const missing = Object.entries(requiredParticulier).filter(([key]) => !(body[key] ?? '').toString().trim())
+      if (missing.length) {
+        return NextResponse.json(
+          { error: 'Champs obligatoires Factur-X pour le client : ' + missing.map(([, label]) => label).join(', ') },
+          { status: 400 }
+        )
+      }
     }
 
     const client = await prisma.client.create({

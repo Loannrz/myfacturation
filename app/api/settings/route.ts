@@ -51,6 +51,43 @@ export async function PUT(req: NextRequest) {
         { status: 400 }
       )
     }
+    const missing: string[] = []
+    emitterList.forEach((ep: { name?: string; companyName?: string; legalStatus?: string; siret?: string; address?: string; postalCode?: string; city?: string; country?: string; vatNumber?: string; email?: string; vatExempt?: boolean; vatExemptionReason?: string }, i: number) => {
+      const label = emitterList.length > 1 ? `Établissement ${i + 1}` : 'Établissement'
+      if (!(ep.name ?? '').toString().trim()) missing.push(`${label} : Nom de l'établissement`)
+      if (!(ep.companyName ?? '').toString().trim()) missing.push(`${label} : Raison sociale`)
+      if (!(ep.legalStatus ?? '').toString().trim()) missing.push(`${label} : Forme juridique`)
+      if (!(ep.siret ?? '').toString().trim()) missing.push(`${label} : SIRET`)
+      if (!(ep.address ?? '').toString().trim()) missing.push(`${label} : Adresse`)
+      if (!(ep.postalCode ?? '').toString().trim()) missing.push(`${label} : Code postal`)
+      if (!(ep.city ?? '').toString().trim()) missing.push(`${label} : Ville`)
+      if (!(ep.country ?? '').toString().trim()) missing.push(`${label} : Pays`)
+      if (!(ep.email ?? '').toString().trim()) missing.push(`${label} : Email`)
+      const vatExempt = !!ep.vatExempt
+      if (!vatExempt && !(ep.vatNumber ?? '').toString().trim()) missing.push(`${label} : N° TVA (obligatoire si assujetti)`)
+      if (vatExempt && !(ep.vatExemptionReason ?? '').toString().trim()) missing.push(`${label} : Motif d'exonération (obligatoire si non assujetti)`)
+    })
+    let hasCompleteBank = false
+    bankList.forEach((a: { name?: string; accountHolder?: string; bankName?: string; iban?: string; bic?: string }, i: number) => {
+      const hasAny = (a?.name ?? '').toString().trim() || (a?.accountHolder ?? '').toString().trim() || (a?.bankName ?? '').toString().trim() || (a?.iban ?? '').toString().trim() || (a?.bic ?? '').toString().trim()
+      if (!hasAny) return
+      const label = bankList.length > 1 ? `Compte ${i + 1}` : 'Compte bancaire'
+      const accountMissing: string[] = []
+      if (!(a?.name ?? '').toString().trim()) accountMissing.push('Nom du compte')
+      if (!(a?.accountHolder ?? '').toString().trim()) accountMissing.push('Titulaire')
+      if (!(a?.bankName ?? '').toString().trim()) accountMissing.push('Banque')
+      if (!(a?.iban ?? '').toString().trim()) accountMissing.push('IBAN')
+      if (!(a?.bic ?? '').toString().trim()) accountMissing.push('BIC')
+      if (accountMissing.length) missing.push(`${label} : ${accountMissing.join(', ')}`)
+      else hasCompleteBank = true
+    })
+    if (!hasCompleteBank) missing.push('Au moins un compte bancaire complet (Nom, Titulaire, Banque, IBAN, BIC)')
+    if (missing.length) {
+      return NextResponse.json(
+        { error: 'Champs obligatoires Factur-X manquants : ' + missing.join(', ') },
+        { status: 400 }
+      )
+    }
     await updateBillingSettings(session.id, {
       companyName: body.companyName,
       legalStatus: body.legalStatus,
@@ -85,6 +122,8 @@ export async function PUT(req: NextRequest) {
       defaultPaymentTerms: canEditAdvanced ? body.defaultPaymentTerms : undefined,
       legalPenaltiesText: canEditAdvanced ? body.legalPenaltiesText : undefined,
       legalRecoveryFeeText: canEditAdvanced ? body.legalRecoveryFeeText : undefined,
+      vatApplicable: body.vatApplicable !== undefined ? !!body.vatApplicable : undefined,
+      vatExemptionReason: body.vatExemptionReason !== undefined ? (body.vatExemptionReason || null) : undefined,
     })
     const settings = await getBillingSettings(session.id)
     const { expenseCategories: raw, bankAccounts: rawBank, emitterProfiles: rawEmitter, ...rest } = settings

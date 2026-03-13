@@ -30,6 +30,38 @@ export async function PUT(
   const existing = await prisma.client.findFirst({ where: { id, userId: session.id, ...whereNotDeleted } })
   if (!existing) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
   const body = await req.json()
+  const type = body.type ?? existing.type
+  const isLegal = ['professionnel', 'association', 'entreprise'].includes(type)
+  if (isLegal) {
+    const required: Record<string, string> = {
+      companyName: 'Raison sociale',
+      siret: 'SIRET',
+      firstName: 'Prénom',
+      lastName: 'Nom',
+      email: 'Email',
+      address: 'Adresse',
+      postalCode: 'Code postal',
+      city: 'Ville',
+      country: 'Pays',
+    }
+    const missing = Object.entries(required).filter(([key]) => !(body[key] ?? existing[key as keyof typeof existing] ?? '').toString().trim())
+    if (missing.length) {
+      return NextResponse.json(
+        { error: 'Champs obligatoires Factur-X : ' + missing.map(([, label]) => label).join(', ') },
+        { status: 400 }
+      )
+    }
+  } else {
+    const required: (keyof typeof existing)[] = ['email', 'address', 'postalCode', 'city', 'country']
+    const missing = required.filter((key) => !(body[key] ?? existing[key] ?? '').toString().trim())
+    if (missing.length) {
+      const labels: Record<string, string> = { email: 'Email', address: 'Adresse', postalCode: 'Code postal', city: 'Ville', country: 'Pays' }
+      return NextResponse.json(
+        { error: 'Champs obligatoires Factur-X : ' + missing.map((k) => labels[k as string]).join(', ') },
+        { status: 400 }
+      )
+    }
+  }
   const client = await prisma.client.update({
     where: { id },
     data: {

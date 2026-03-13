@@ -177,6 +177,7 @@ model Client {
 model Company {
   id          String    @id @default(cuid())
   userId      String
+  type        String    @default("societe") // societe | association
   name        String
   legalName   String?
   address     String?
@@ -185,6 +186,7 @@ model Company {
   country     String?
   siret       String?
   vatNumber   String?
+  vatExempt   Boolean   @default(false) // true = non assujetti à la TVA (masque n° TVA, mention légale sur documents)
   email       String?
   phone       String?
   website     String?
@@ -264,6 +266,7 @@ model Invoice {
   vatAmount        Float          @default(0)
   totalTTC         Float          @default(0)
   tvaNonApplicable Boolean        @default(false)
+  note             String?        // note / mention sur la facture (optionnel, pour Factur-X)
   paidAt           DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -306,7 +309,9 @@ model CreditNote {
   vatAmount       Float            @default(0)
   totalTTC        Float            @default(0)
   tvaNonApplicable Boolean         @default(false)
-  reason           String?         // motif (remboursement, annulation partielle, etc.)
+  reason           String?         // motif avoir (obligatoire pour Factur-X / EN16931)
+  dueDate          String?         // date d'échéance paiement
+  paymentTerms     String?         // conditions de paiement
   refundedAt       DateTime?      // date du remboursement quand status = refunded
   emitterProfileId String?
   bankAccountId   String?
@@ -477,6 +482,8 @@ model BillingSettings {
   legalPenaltiesText    String?  // texte pénalités de retard
   legalRecoveryFeeText  String?  // texte indemnité forfaitaire recouvrement
   expenseCategories     String?
+  vatApplicable         Boolean  @default(true)  // true = assujetti TVA, false = non assujetti (TVA 0, total HT = TTC)
+  vatExemptionReason    String?  // motif exonération (ex: article 293 B CGI), affiché sur PDF si non assujetti
   updatedAt             DateTime @updatedAt
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

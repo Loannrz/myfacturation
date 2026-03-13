@@ -28,6 +28,7 @@ type ClientData = {
   address: string | null
   postalCode: string | null
   city: string | null
+  country: string | null
 }
 
 export default function ModifierClientPage() {
@@ -48,6 +49,7 @@ export default function ModifierClientPage() {
   const [address, setAddress] = useState('')
   const [postalCode, setPostalCode] = useState('')
   const [city, setCity] = useState('')
+  const [country, setCountry] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -68,6 +70,7 @@ export default function ModifierClientPage() {
         setAddress(c.address ?? '')
         setPostalCode(c.postalCode ?? '')
         setCity(c.city ?? '')
+        setCountry(c.country ?? '')
       })
       .catch(() => setError('Client introuvable'))
       .finally(() => setLoadingClient(false))
@@ -88,13 +91,20 @@ export default function ModifierClientPage() {
       if (!address.trim()) missing.push('Adresse')
       if (!postalCode.trim()) missing.push('Code postal')
       if (!city.trim()) missing.push('Ville')
+      if (!country.trim()) missing.push('Pays')
       if (missing.length) {
-        setError(`Champs obligatoires pour un client ${type} : ${missing.join(', ')}`)
+        setError(`Champs obligatoires Factur-X : ${missing.join(', ')}`)
         return
       }
     } else {
-      if (!email.trim()) {
-        setError('L’email est obligatoire.')
+      const missing: string[] = []
+      if (!email.trim()) missing.push('Email')
+      if (!address.trim()) missing.push('Adresse')
+      if (!postalCode.trim()) missing.push('Code postal')
+      if (!city.trim()) missing.push('Ville')
+      if (!country.trim()) missing.push('Pays')
+      if (missing.length) {
+        setError('Champs obligatoires Factur-X : ' + missing.join(', '))
         return
       }
     }
@@ -115,6 +125,7 @@ export default function ModifierClientPage() {
           address: address.trim() || undefined,
           postalCode: postalCode.trim() || undefined,
           city: city.trim() || undefined,
+          country: country.trim() || undefined,
         }),
       })
       if (res.ok) {
@@ -273,9 +284,13 @@ export default function ModifierClientPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-[var(--muted)] mb-1">Ville {requireLegal && '*'}</label>
+            <label className="block text-sm text-[var(--muted)] mb-1">Ville *</label>
             <input type="text" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} placeholder="Paris" />
           </div>
+        </div>
+        <div>
+          <label className="block text-sm text-[var(--muted)] mb-1">Pays *</label>
+          <input type="text" value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass} placeholder="France" />
         </div>
         <div className="flex gap-4 pt-4">
           <button

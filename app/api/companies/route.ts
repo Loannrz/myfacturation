@@ -25,20 +25,50 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   try {
     const body = await req.json()
+    const name = (body.name ?? '').toString().trim()
+    const legalName = (body.legalName ?? '').toString().trim()
+    const email = (body.email ?? '').toString().trim()
+    const address = (body.address ?? '').toString().trim()
+    const postalCode = (body.postalCode ?? '').toString().trim()
+    const city = (body.city ?? '').toString().trim()
+    const country = (body.country ?? '').toString().trim()
+    const siret = (body.siret ?? '').toString().trim()
+    const vatExempt = !!body.vatExempt
+    const vatNumber = (body.vatNumber ?? '').toString().trim()
+
+    const missing: string[] = []
+    if (!name) missing.push('Nom')
+    if (!legalName) missing.push('Raison sociale')
+    if (!email) missing.push('Email')
+    if (!address) missing.push('Adresse')
+    if (!postalCode) missing.push('Code postal')
+    if (!city) missing.push('Ville')
+    if (!country) missing.push('Pays')
+    if (!siret) missing.push('SIRET')
+    if (!vatExempt && !vatNumber) missing.push('N° TVA ou cocher « Non assujetti à la TVA »')
+    if (missing.length) {
+      return NextResponse.json(
+        { error: `Champs obligatoires manquants : ${missing.join(', ')}.` },
+        { status: 400 }
+      )
+    }
+
     const company = await prisma.company.create({
       data: {
         userId: session.id,
-        name: body.name ?? '',
-        legalName: body.legalName ?? undefined,
-        address: body.address ?? undefined,
-        postalCode: body.postalCode ?? undefined,
-        city: body.city ?? undefined,
-        country: body.country ?? undefined,
-        siret: body.siret ?? undefined,
-        vatNumber: body.vatNumber ?? undefined,
-        email: body.email ?? undefined,
-        phone: body.phone ?? undefined,
-        website: body.website ?? undefined,
+        type: body.type === 'association' ? 'association' : 'societe',
+        name,
+        legalName,
+        address,
+        postalCode,
+        city,
+        country,
+        siret,
+        vatNumber: vatExempt ? undefined : vatNumber || undefined,
+        vatExempt,
+        email,
+        phone: (body.phone ?? '').toString().trim() || undefined,
+        website: (body.website ?? '').toString().trim() || undefined,
       },
     })
     await logBillingActivity(session.id, 'company created', 'company', company.id, { name: company.name })

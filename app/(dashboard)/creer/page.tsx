@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { FileText, Receipt, RotateCcw, Wallet, UserCircle, User, Package } from 'lucide-react'
+import { FileText, Receipt, RotateCcw, Wallet, UserCircle, User, Package, Building2 } from 'lucide-react'
 import { CreateEmployeeModal } from '../components/CreateEmployeeModal'
 import { CreateExpenseModal } from '../components/CreateExpenseModal'
 
@@ -69,7 +69,17 @@ export default function CreerPage() {
             <User className="w-10 h-10 text-[var(--foreground)]" />
           </div>
           <span className="text-lg font-medium">Nouveau client</span>
-          <span className="text-sm text-[var(--muted)] text-center">Particulier, entreprise ou société</span>
+          <span className="text-sm text-[var(--muted)] text-center">Particulier</span>
+        </Link>
+        <Link
+          href="/societes/nouveau"
+          className="flex flex-col items-center gap-4 p-8 rounded-xl border-2 border-[var(--border)] bg-[var(--background)] hover:border-[var(--muted)] hover:bg-[var(--border)]/10 transition-colors"
+        >
+          <div className="p-4 rounded-full bg-[var(--border)]/30">
+            <Building2 className="w-10 h-10 text-[var(--foreground)]" />
+          </div>
+          <span className="text-lg font-medium">Nouvelle société</span>
+          <span className="text-sm text-[var(--muted)] text-center">Société ou association</span>
         </Link>
         <Link
           href="/produits/nouveau"

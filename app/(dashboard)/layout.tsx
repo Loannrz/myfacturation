@@ -22,6 +22,7 @@ import {
   Sparkles,
   Shield,
   MessageCircle,
+  Building2,
 } from 'lucide-react'
 import { useEffect, useState, useRef } from 'react'
 import { canAccessFeatureByPlan, effectiveSubscriptionPlan } from '@/lib/subscription'
@@ -35,9 +36,13 @@ type NavItem = {
   businessOnly?: boolean
 }
 
-const nav: NavItem[] = [
+// Groupes de navigation : vue d’ensemble → créer / documents → compte & aide
+const navSectionOverview: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/activite', label: 'Activité', icon: Activity, businessOnly: true },
+  { href: '/comptabilite', label: 'Comptabilité', icon: Wallet, feature: 'accounting' },
+]
+const navSectionDocuments: NavItem[] = [
   { href: '/creer', label: 'Créer', icon: FilePlus2 },
   { href: '/factures', label: 'Factures', icon: Receipt },
   { href: '/avoirs', label: 'Avoirs', icon: RotateCcw, feature: 'creditNotes' },
@@ -45,11 +50,14 @@ const nav: NavItem[] = [
   { href: '/depenses', label: 'Dépenses', icon: Banknote, feature: 'expenses' },
   { href: '/salaries', label: 'Salariés', icon: UserCircle, feature: 'employees' },
   { href: '/clients', label: 'Clients', icon: Users },
+  { href: '/societes', label: 'Sociétés', icon: Building2 },
   { href: '/produits', label: 'Produits', icon: Package, feature: 'products' },
-  { href: '/comptabilite', label: 'Comptabilité', icon: Wallet, feature: 'accounting' },
+]
+const navSectionAccount: NavItem[] = [
   { href: '/formules', label: 'Formules', icon: Sparkles },
   { href: '/parametres', label: 'Paramètres', icon: Settings },
 ]
+const navSections = [navSectionOverview, navSectionDocuments, navSectionAccount]
 
 export default function DashboardLayout({
   children,
@@ -120,48 +128,57 @@ export default function DashboardLayout({
               Admin
             </Link>
           )}
-          {nav.map((item) => {
-            const { href, label, icon: Icon } = item
-            const key = href
-            const locked = isLocked(item)
-            if (locked) {
-              return (
-                <span
-                  key={key}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--muted)] cursor-not-allowed opacity-75"
-                  title={lockTooltip(item)}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  {label}
-                </span>
-              )
-            }
-            const isActive = pathname === href || (href !== '/dashboard' && pathname?.startsWith(href))
-            return (
-              <span key={key} className="contents">
-                {href === '/formules' && (
-                  <Link
-                    href="/messages"
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                      pathname?.startsWith('/messages') ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)] hover:bg-[var(--border)]/20 hover:text-[var(--foreground)]'
-                    }`}
-                  >
-                    <MessageCircle className="w-4 h-4 shrink-0" />
-                    Envoyer un message{messagesUnread > 0 ? ` (${messagesUnread})` : ''}
-                  </Link>
-                )}
-                <Link
-                  href={href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                    isActive ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)] hover:bg-[var(--border)]/20 hover:text-[var(--foreground)]'
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  {label}
-                </Link>
-              </span>
-            )
-          })}
+          {navSections.map((section, sectionIndex) => (
+            <div key={sectionIndex}>
+              {sectionIndex > 0 && (
+                <div className="my-3 border-t border-[var(--border)]/80" aria-hidden />
+              )}
+              <div className="space-y-0.5">
+                {section.map((item) => {
+                  const { href, label, icon: Icon } = item
+                  const key = href
+                  const locked = isLocked(item)
+                  if (locked) {
+                    return (
+                      <span
+                        key={key}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--muted)] cursor-not-allowed opacity-75"
+                        title={lockTooltip(item)}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" />
+                        {label}
+                      </span>
+                    )
+                  }
+                  const isActive = pathname === href || (href !== '/dashboard' && pathname?.startsWith(href))
+                  return (
+                    <span key={key} className="contents">
+                      {href === '/formules' && (
+                        <Link
+                          href="/messages"
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                            pathname?.startsWith('/messages') ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)] hover:bg-[var(--border)]/20 hover:text-[var(--foreground)]'
+                          }`}
+                        >
+                          <MessageCircle className="w-4 h-4 shrink-0" />
+                          Support{messagesUnread > 0 ? ` (${messagesUnread})` : ''}
+                        </Link>
+                      )}
+                      <Link
+                        href={href}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                          isActive ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)] hover:bg-[var(--border)]/20 hover:text-[var(--foreground)]'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" />
+                        {label}
+                      </Link>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
         <div className="mt-auto p-4 border-t border-[var(--border)] space-y-2">
           <ThemeToggle />
@@ -207,40 +224,49 @@ export default function DashboardLayout({
                   Admin
                 </Link>
               )}
-              {nav.map((item) => {
-                const { href, label, icon: Icon } = item
-                const key = href
-                const locked = isLocked(item)
-                if (locked) {
-                  return (
-                    <span key={key} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--muted)] opacity-75" title={lockTooltip(item)}>
-                      <Icon className="w-4 h-4" />
-                      {label}
-                    </span>
-                  )
-                }
-                const isActive = pathname === href || (href !== '/dashboard' && pathname?.startsWith(href))
-                return (
-                  <span key={key} className="contents">
-                    {href === '/formules' && (
-                      <Link href="/messages" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--foreground)]">
-                        <MessageCircle className="w-4 h-4" />
-                        Envoyer un message{messagesUnread > 0 ? ` (${messagesUnread})` : ''}
-                      </Link>
-                    )}
-                    <Link
-                      href={href}
-                      onClick={() => setMobileOpen(false)}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
-                        isActive ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)]'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {label}
-                    </Link>
-                  </span>
-                )
-              })}
+              {navSections.map((section, sectionIndex) => (
+                <div key={sectionIndex}>
+                  {sectionIndex > 0 && (
+                    <div className="my-3 border-t border-[var(--border)]/80" aria-hidden />
+                  )}
+                  <div className="space-y-0.5">
+                    {section.map((item) => {
+                      const { href, label, icon: Icon } = item
+                      const key = href
+                      const locked = isLocked(item)
+                      if (locked) {
+                        return (
+                          <span key={key} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--muted)] opacity-75" title={lockTooltip(item)}>
+                            <Icon className="w-4 h-4" />
+                            {label}
+                          </span>
+                        )
+                      }
+                      const isActive = pathname === href || (href !== '/dashboard' && pathname?.startsWith(href))
+                      return (
+                        <span key={key} className="contents">
+                          {href === '/formules' && (
+                            <Link href="/messages" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--foreground)]">
+                              <MessageCircle className="w-4 h-4" />
+                              Support{messagesUnread > 0 ? ` (${messagesUnread})` : ''}
+                            </Link>
+                          )}
+                          <Link
+                            href={href}
+                            onClick={() => setMobileOpen(false)}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
+                              isActive ? 'bg-[var(--border)]/30 font-medium' : 'text-[var(--muted)]'
+                            }`}
+                          >
+                            <Icon className="w-4 h-4" />
+                            {label}
+                          </Link>
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </nav>
             <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-[var(--border)] space-y-2">
               <ThemeToggle />

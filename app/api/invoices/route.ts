@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { getBillingSettings, getNextInvoiceNumber, parseBankAccounts } from '@/lib/billing-settings'
+import { getBillingSettings, getNextInvoiceNumber, parseBankAccounts, parseEmitterProfiles } from '@/lib/billing-settings'
 import { logBillingActivity } from '@/lib/billing-activity'
 import { whereNotDeleted } from '@/lib/soft-delete'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
@@ -110,23 +110,45 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const bankAccounts = parseBankAccounts(typeof settings.bankAccounts === 'string' ? settings.bankAccounts : null)
+    const emitterProfiles = parseEmitterProfiles(typeof settings.emitterProfiles === 'string' ? settings.emitterProfiles : null)
+    const vatApplicable = (settings as { vatApplicable?: boolean }).vatApplicable !== false
+
     if (bankAccounts.length > 0 && !(body.bankAccountId && String(body.bankAccountId).trim())) {
       return NextResponse.json({ error: 'Veuillez sélectionner un compte bancaire pour cette facture.' }, { status: 400 })
     }
-    const number = body.number ?? (await getNextInvoiceNumber(session.id))
-
+    if (!body.issueDate || typeof body.issueDate !== 'string' || !body.issueDate.trim()) {
+      return NextResponse.json({ error: 'La date d\'émission est obligatoire (Factur-X / EN16931).' }, { status: 400 })
+    }
+    if (!body.dueDate || typeof body.dueDate !== 'string' || !body.dueDate.trim()) {
+      return NextResponse.json({ error: 'La date d\'échéance est obligatoire (Factur-X / EN16931).' }, { status: 400 })
+    }
+    if (!body.paymentMethod || typeof body.paymentMethod !== 'string' || !body.paymentMethod.trim()) {
+      return NextResponse.json({ error: 'Le mode de paiement est obligatoire (Factur-X / EN16931).' }, { status: 400 })
+    }
+    const hasRecipient = (body.clientId && String(body.clientId).trim()) || (body.companyId && String(body.companyId).trim())
+    if (!hasRecipient) {
+      return NextResponse.json({ error: 'Un client ou une société destinataire est obligatoire (Factur-X / EN16931).' }, { status: 400 })
+    }
+    if (emitterProfiles.length > 0 && (!body.emitterProfileId || !String(body.emitterProfileId).trim())) {
+      return NextResponse.json({ error: 'Veuillez sélectionner un émetteur (établissement) pour la facture.' }, { status: 400 })
+    }
     const lines = Array.isArray(body.lines) ? body.lines : []
+    if (lines.length === 0) {
+      return NextResponse.json({ error: 'Au moins une ligne de facture est obligatoire (Factur-X / EN16931).' }, { status: 400 })
+    }
+
+    const number = body.number ?? (await getNextInvoiceNumber(session.id))
     let totalHT = 0
     let vatAmount = 0
     const lineData = lines.map((line: { type?: string; description?: string; quantity?: number; unitPrice?: number; vatRate?: number; discount?: number }) => {
       const qty = Number(line.quantity) || 1
       const unit = roundDownTo2Decimals(Number(line.unitPrice) || 0)
-      const vatRate = Number(line.vatRate) ?? 20
+      const vatRate = vatApplicable ? (Number(line.vatRate) ?? 20) : 0
       const discount = Number(line.discount) ?? 0
-      const total = (qty * unit * (1 - discount / 100)) * (1 + vatRate / 100)
       const ht = qty * unit * (1 - discount / 100)
+      const total = vatApplicable ? ht * (1 + vatRate / 100) : ht
       totalHT += ht
-      vatAmount += total - ht
+      vatAmount += vatApplicable ? total - ht : 0
       return {
         type: line.type ?? 'service',
         description: line.description ?? '',
@@ -156,7 +178,8 @@ export async function POST(req: NextRequest) {
         totalHT: Math.round(totalHT * 100) / 100,
         vatAmount: Math.round(vatAmount * 100) / 100,
         totalTTC: Math.round((totalHT + vatAmount) * 100) / 100,
-        tvaNonApplicable: body.tvaNonApplicable === true,
+        tvaNonApplicable: !vatApplicable,
+        note: typeof body.note === 'string' ? (body.note.trim() || null) : null,
         lines: { create: lineData },
       },
       include: { client: true, company: true, lines: true },

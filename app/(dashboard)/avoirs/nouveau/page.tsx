@@ -122,6 +122,18 @@ export default function NouvelAvoirPage() {
       setFormError('Veuillez sélectionner un compte bancaire de référence.')
       return
     }
+    if (!invoiceId || !invoiceId.trim()) {
+      setFormError('Veuillez sélectionner une facture d\'origine.')
+      return
+    }
+    if (!reason || !reason.trim()) {
+      setFormError('Le motif de l\'avoir est obligatoire (Factur-X / EN16931).')
+      return
+    }
+    if (lines.length === 0 || lines.every((l) => !(l.description && String(l.description).trim()))) {
+      setFormError('Au moins une ligne avec une description est obligatoire.')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch('/api/credit-notes', {
@@ -130,7 +142,7 @@ export default function NouvelAvoirPage() {
         body: JSON.stringify({
           clientId: clientId || null,
           companyId: companyId || null,
-          invoiceId: invoiceId || null,
+          invoiceId: invoiceId.trim() || null,
           issueDate,
           reason: reason.trim() || null,
           paymentMethod: paymentMethod || null,
@@ -148,6 +160,9 @@ export default function NouvelAvoirPage() {
       if (res.ok) {
         const cn = await res.json()
         router.push(`/avoirs?created=${cn.id}`)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setFormError((data as { error?: string }).error || 'Erreur lors de la création')
       }
     } finally {
       setLoading(false)
@@ -237,9 +252,9 @@ export default function NouvelAvoirPage() {
               </div>
             )}
             <div className="sm:col-span-2">
-              <label className="block text-sm text-[var(--muted)] mb-1">Facture d&apos;origine (optionnel)</label>
-              <select value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)]">
-                <option value="">— Aucune —</option>
+              <label className="block text-sm text-[var(--muted)] mb-1">Facture d&apos;origine *</label>
+              <select value={invoiceId} onChange={(e) => { setInvoiceId(e.target.value); setFormError('') }} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)]" required>
+                <option value="">— Sélectionner une facture —</option>
                 {invoices.map((inv) => (
                   <option key={inv.id} value={inv.id}>{inv.number}</option>
                 ))}
@@ -250,8 +265,8 @@ export default function NouvelAvoirPage() {
               <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)]" required />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm text-[var(--muted)] mb-1">Motif (optionnel)</label>
-              <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ex. Remboursement, annulation partielle" className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)]" />
+              <label className="block text-sm text-[var(--muted)] mb-1">Motif *</label>
+              <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ex. Remboursement, annulation partielle" className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)]" required />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm text-[var(--muted)] mb-1">Mode de paiement (obligatoire)</label>

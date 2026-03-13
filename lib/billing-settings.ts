@@ -42,6 +42,8 @@ export type EmitterProfileEntry = {
   legalStatus: string
   siret: string
   vatNumber?: string
+  vatExempt?: boolean // true = non assujetti à la TVA (pas de N° TVA, motif d'exonération)
+  vatExemptionReason?: string
   apeCode?: string
   address: string
   postalCode: string
@@ -286,11 +288,15 @@ export async function updateBillingSettings(
     defaultPaymentTerms?: string
     legalPenaltiesText?: string
     legalRecoveryFeeText?: string
+    vatApplicable?: boolean
+    vatExemptionReason?: string | null
   }
 ) {
   const settings = await getBillingSettings(userId)
   const { expenseCategories, bankAccounts, emitterProfiles, ...rest } = data
   const updateData = { ...rest, updatedAt: new Date() } as Parameters<typeof prisma.billingSettings.update>[0]['data']
+  if (data.vatApplicable !== undefined) (updateData as { vatApplicable?: boolean }).vatApplicable = data.vatApplicable
+  if (data.vatExemptionReason !== undefined) (updateData as { vatExemptionReason?: string | null }).vatExemptionReason = data.vatExemptionReason === '' ? null : (data.vatExemptionReason ?? null)
   if (Array.isArray(expenseCategories)) {
     (updateData as { expenseCategories?: string }).expenseCategories = JSON.stringify(expenseCategories)
   }

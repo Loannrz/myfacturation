@@ -15,6 +15,7 @@ export const config = {
     '/devis/:path*',
     '/avoirs/:path*',
     '/clients/:path*',
+    '/societes/:path*',
     '/produits/:path*',
     '/creer/:path*',
     '/activite/:path*',

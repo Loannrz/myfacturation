@@ -35,6 +35,9 @@ export default function ModifierFacturePage() {
   const [emitterProfileId, setEmitterProfileId] = useState('')
   const [status, setStatus] = useState('draft')
   const [paidAt, setPaidAt] = useState('')
+  const [note, setNote] = useState('')
+  const [vatApplicable, setVatApplicable] = useState(true)
+  const [formError, setFormError] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -54,6 +57,7 @@ export default function ModifierFacturePage() {
       setCompanies(companiesList)
       setProducts(productsList)
       setBankAccounts(Array.isArray(settings?.bankAccounts) ? settings.bankAccounts : [])
+      setVatApplicable(settings?.vatApplicable !== false)
       const profiles = Array.isArray(settings?.emitterProfiles) ? settings.emitterProfiles : []
       setEmitterProfiles(profiles)
       setEmitterProfileId(invoice.emitterProfileId ?? (profiles[0]?.id ?? ''))
@@ -63,6 +67,7 @@ export default function ModifierFacturePage() {
       setIssueDate(invoice.issueDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10))
       const issue = invoice.issueDate?.slice(0, 10)
       const due = invoice.dueDate?.slice(0, 10)
+      if (due) setDueDate(due)
       if (issue && due) {
         const diff = Math.round((new Date(due).getTime() - new Date(issue).getTime()) / (24 * 60 * 60 * 1000))
         const closest = ([15, 30, 60, 90] as const).reduce((a, b) => (Math.abs(a - diff) < Math.abs(b - diff) ? a : b))
@@ -72,6 +77,7 @@ export default function ModifierFacturePage() {
       setBankAccountId(invoice.bankAccountId ?? '')
       setStatus(invoice.status ?? 'draft')
       setPaidAt(invoice.paidAt ? new Date(invoice.paidAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10))
+      setNote(invoice.note ?? '')
       if (Array.isArray(invoice.lines) && invoice.lines.length > 0) {
         setLines(invoice.lines.map((l: { description?: string; quantity?: number; unitPrice?: number; vatRate?: number; discount?: number }) => ({
           description: l.description ?? '',
@@ -123,6 +129,15 @@ export default function ModifierFacturePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setFormError('')
+    if (!dueDate || !dueDate.trim()) {
+      setFormError('La date d\'échéance est obligatoire (Factur-X / EN16931).')
+      return
+    }
+    if (lines.length === 0 || lines.every((l) => !(l.description && String(l.description).trim()))) {
+      setFormError('Au moins une ligne de facture avec une description est obligatoire.')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch(`/api/invoices/${id}`, {
@@ -136,20 +151,25 @@ export default function ModifierFacturePage() {
           dueDate: dueDate || null,
           paidAt: status === 'paid' && paidAt ? paidAt : undefined,
           currency: 'EUR',
-          paymentTerms: paymentTermDays ? `${paymentTermDays} jours net` : null,
+          paymentTerms: paymentTermDays ? `${paymentTermDays} jours` : null,
           paymentMethod: paymentMethod || null,
           bankAccountId: bankAccountId || null,
           emitterProfileId: emitterProfileId || null,
+          note: (typeof note === 'string' ? note.trim() : '') || null,
           lines: lines.map((line) => ({
             description: line.description,
             quantity: Number(line.quantity),
             unitPrice: Number(line.unitPrice),
-            vatRate: Number(line.vatRate),
+            vatRate: vatApplicable ? Number(line.vatRate) : 0,
             discount: Number(line.discount),
           })),
         }),
       })
       if (res.ok) router.push(`/factures?updated=${id}`)
+      else {
+        const data = await res.json().catch(() => ({}))
+        setFormError((data as { error?: string }).error || 'Erreur lors de l\'enregistrement')
+      }
     } finally {
       setLoading(false)
     }
@@ -196,6 +216,7 @@ export default function ModifierFacturePage() {
           }}
           className="space-y-6"
         >
+          {formError && <p className="text-sm text-red-500 bg-red-500/10 rounded-lg p-3">{formError}</p>}
           {emitterProfiles.length > 1 && (
             <div className="border border-[var(--border)] rounded-xl p-6 bg-[var(--background)]">
               <h2 className="text-sm font-medium text-[var(--foreground)] mb-4">Émetteur</h2>
@@ -276,6 +297,10 @@ export default function ModifierFacturePage() {
                   </select>
                 </div>
               )}
+              <div className="sm:col-span-2">
+                <label className="block text-sm text-[var(--muted)] mb-1">Note ou mention (optionnel)</label>
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Mention affichée sur le PDF (Factur-X)" className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] resize-y" />
+              </div>
               <div>
                 <label className="block text-sm text-[var(--muted)] mb-1">Statut</label>
                 <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]">

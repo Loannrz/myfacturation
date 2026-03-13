@@ -30,17 +30,19 @@ export async function PUT(
   const existing = await prisma.company.findFirst({ where: { id, userId: session.id, ...whereNotDeleted } })
   if (!existing) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
   const body = await req.json()
-  const company = await prisma.company.update({
-    where: { id },
-    data: {
-      name: body.name ?? existing.name,
-      legalName: body.legalName ?? undefined,
+    const company = await prisma.company.update({
+      where: { id },
+      data: {
+        type: body.type !== undefined ? (body.type === 'association' ? 'association' : 'societe') : existing.type ?? 'societe',
+        name: body.name ?? existing.name,
+        legalName: body.legalName ?? undefined,
       address: body.address ?? undefined,
       postalCode: body.postalCode ?? undefined,
       city: body.city ?? undefined,
       country: body.country ?? undefined,
       siret: body.siret ?? undefined,
-      vatNumber: body.vatNumber ?? undefined,
+      vatNumber: body.vatExempt ? undefined : (body.vatNumber ?? undefined),
+      vatExempt: body.vatExempt !== undefined ? !!body.vatExempt : (existing.vatExempt ?? false),
       email: body.email ?? undefined,
       phone: body.phone ?? undefined,
       website: body.website ?? undefined,

@@ -8,6 +8,8 @@ import { sendMail } from '@/lib/smtp'
 import { logBillingActivity } from '@/lib/billing-activity'
 import { whereNotDeleted } from '@/lib/soft-delete'
 import { buildBillingEmailHtml } from '@/lib/billing-email-template'
+import { buildDocumentDataFromInvoice } from '@/lib/en16931-xml'
+import { embedFacturXInPdf } from '@/lib/factur-x-embed'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,8 +49,26 @@ export async function POST(
     return NextResponse.json({ error: 'Aucune adresse email pour ce client/société' }, { status: 400 })
   }
   const settings = await getBillingSettings(session.id)
+  const documentData = buildDocumentDataFromInvoice(invoice, settings)
+  const sellerSiren = (documentData.seller.companyId ?? '').replace(/\D/g, '').slice(0, 9)
+  if (!sellerSiren && !documentData.seller.vatId) {
+    return NextResponse.json(
+      { error: 'Pour envoyer un PDF Factur-X, renseignez le SIRET (ou N° TVA) dans Paramètres > Facturation ou dans le profil émetteur.' },
+      { status: 400 }
+    )
+  }
   const pdfLib = await loadPdfLib()
-  const pdf = await generateInvoicePDF(invoice, settings, pdfLib)
+  const pdfBuffer = await generateInvoicePDF(invoice, settings, pdfLib)
+  let pdf: Buffer
+  try {
+    pdf = await embedFacturXInPdf(pdfBuffer, documentData)
+  } catch (err) {
+    console.error('[invoice send-email] embedFacturXInPdf failed:', err)
+    return NextResponse.json(
+      { error: 'Échec de la génération du PDF Factur-X', details: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    )
+  }
   const companyName = settings.companyName || 'Myfacturation'
   const amountStr = `${invoice.totalTTC.toFixed(2)} ${invoice.currency}`
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || ''

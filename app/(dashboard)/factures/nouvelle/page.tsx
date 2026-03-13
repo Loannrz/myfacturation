@@ -37,6 +37,8 @@ export default function NouvelleFacturePage() {
   /** Saisie libre du total TTC : index de la ligne en cours d’édition, et valeur affichée (string). */
   const [editingTotalAt, setEditingTotalAt] = useState<number | null>(null)
   const [editingTotalValue, setEditingTotalValue] = useState('')
+  const [note, setNote] = useState('')
+  const [vatApplicable, setVatApplicable] = useState(true)
 
   useEffect(() => {
     Promise.all([fetch('/api/me').then((r) => r.ok ? r.json() : null), fetch('/api/settings').then((r) => r.ok ? r.json() : null)])
@@ -49,6 +51,7 @@ export default function NouvelleFacturePage() {
           const profiles = Array.isArray(settings.emitterProfiles) ? settings.emitterProfiles : []
           setEmitterProfiles(profiles)
           if (profiles.length > 0) setEmitterProfileId((prev) => prev || profiles[0].id)
+          setVatApplicable(settings.vatApplicable !== false)
         } else setCanCreate(false)
       })
       .catch(() => setCanCreate(false))
@@ -68,13 +71,14 @@ export default function NouvelleFacturePage() {
     setDueDate(d.toISOString().slice(0, 10))
   }, [issueDate, paymentTermDays])
 
-  const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: 20, discount: 0 }])
+  const defaultVatRate = vatApplicable ? 20 : 0
+  const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: defaultVatRate, discount: 0 }])
   const addProductAsLine = (product: Product) => {
     setLines((l) => [...l, {
       description: product.name,
       quantity: 1,
       unitPrice: product.unitPrice,
-      vatRate: product.vatRate,
+      vatRate: vatApplicable ? product.vatRate : 0,
       discount: product.discount,
     }])
   }
@@ -85,14 +89,14 @@ export default function NouvelleFacturePage() {
   const lineTotalTTC = (line: { quantity: number; unitPrice: number; vatRate: number; discount: number }) => {
     const q = Number(line.quantity) || 0
     const pu = Number(line.unitPrice) || 0
-    const vat = Number(line.vatRate) ?? 20
+    const vat = vatApplicable ? (Number(line.vatRate) ?? 20) : 0
     const rem = Number(line.discount) ?? 0
     return Math.round(q * pu * (1 - rem / 100) * (1 + vat / 100) * 100) / 100
   }
   const setLineUnitPriceFromTotal = (i: number, totalTTC: number) => {
     const line = lines[i]
     const q = Math.max(Number(line.quantity) || 1, 1)
-    const vat = Number(line.vatRate) ?? 20
+    const vat = vatApplicable ? (Number(line.vatRate) ?? 20) : 0
     const rem = Number(line.discount) ?? 0
     const denom = q * (1 - rem / 100) * (1 + vat / 100)
     const puRaw = denom ? totalTTC / denom : 0
@@ -129,6 +133,14 @@ export default function NouvelleFacturePage() {
       setFormError('Veuillez sélectionner un compte bancaire de référence.')
       return
     }
+    if (!dueDate || !dueDate.trim()) {
+      setFormError('La date d\'échéance est obligatoire (Factur-X / EN16931).')
+      return
+    }
+    if (lines.length === 0 || lines.every((l) => !(l.description && String(l.description).trim()))) {
+      setFormError('Au moins une ligne de facture avec une description est obligatoire.')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch('/api/invoices', {
@@ -139,14 +151,16 @@ export default function NouvelleFacturePage() {
           companyId: companyId || null,
           issueDate,
           dueDate: dueDate || null,
+          paymentTerms: `${paymentTermDays} jours`,
           paymentMethod: paymentMethod || null,
           bankAccountId: bankAccountId || null,
           emitterProfileId: emitterProfileId || null,
+          note: note.trim() || null,
           lines: lines.map((line) => ({
             description: line.description,
             quantity: Number(line.quantity),
             unitPrice: Number(line.unitPrice),
-            vatRate: Number(line.vatRate),
+            vatRate: vatApplicable ? Number(line.vatRate) : 0,
             discount: Number(line.discount),
           })),
         }),
@@ -342,6 +356,16 @@ export default function NouvelleFacturePage() {
                 </select>
               </div>
             )}
+            <div className="sm:col-span-2">
+              <label className="block text-sm text-[var(--muted)] mb-1">Note ou mention (optionnel)</label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                placeholder="Mention affichée sur le PDF (Factur-X)"
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] resize-y"
+              />
+            </div>
           </div>
         </div>
 
@@ -426,9 +450,11 @@ export default function NouvelleFacturePage() {
                     type="number"
                     min={0}
                     max={100}
-                    value={line.vatRate}
-                    onChange={(e) => updateLine(i, 'vatRate', e.target.value)}
-                    className="w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+                    value={vatApplicable ? line.vatRate : 0}
+                    onChange={(e) => vatApplicable && updateLine(i, 'vatRate', e.target.value)}
+                    readOnly={!vatApplicable}
+                    className={`w-full px-2 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--muted)] ${!vatApplicable ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    title={!vatApplicable ? 'Entreprise non assujettie à la TVA (Paramètres)' : undefined}
                   />
                 </div>
                 <div className="col-span-1">

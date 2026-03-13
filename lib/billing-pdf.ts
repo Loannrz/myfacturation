@@ -54,6 +54,7 @@ interface Recipient {
   companyName?: string
   siret?: string
   vatNumber?: string
+  vatExempt?: boolean // true = non assujetti à la TVA (mention légale sur documents)
 }
 
 const MARGIN = 56
@@ -99,6 +100,7 @@ function getRecipient(client: Client | null, company: Company | null): Recipient
       email: company.email ?? undefined,
       siret: company.siret ?? undefined,
       vatNumber: company.vatNumber ?? undefined,
+      vatExempt: company.vatExempt ?? false,
     }
   }
   if (client) {
@@ -211,11 +213,13 @@ async function generateDocumentPDF(
   const bankAccountId = (doc as { bankAccountId?: string | null }).bankAccountId ?? undefined
   const emitterProfileId = (doc as { emitterProfileId?: string | null }).emitterProfileId ?? undefined
 
-  const s = settings as BillingSettingsWithBank & { emitterProfiles?: string | unknown[] }
+  const s = settings as BillingSettingsWithBank & { emitterProfiles?: string | unknown[]; vatApplicable?: boolean; vatExemptionReason?: string | null }
+  const vatApplicable = s.vatApplicable !== false
+  const vatExemptionReasonText = (s.vatExemptionReason && String(s.vatExemptionReason).trim()) || 'TVA non applicable – article 293 B du CGI'
   const bankAccountsList = parseBankAccounts(typeof s.bankAccounts === 'string' ? s.bankAccounts : null)
   const profilesList = Array.isArray(s.emitterProfiles) ? s.emitterProfiles : parseEmitterProfiles(typeof s.emitterProfiles === 'string' ? s.emitterProfiles : null)
   const emitterProfile = emitterProfileId && profilesList.length > 0 ? profilesList.find((p: unknown) => (p as { id: string }).id === emitterProfileId) : null
-  const emitter = emitterProfile
+  const emitterRaw = emitterProfile
     ? {
         companyName: (emitterProfile as { companyName?: string }).companyName ?? '',
         legalStatus: (emitterProfile as { legalStatus?: string }).legalStatus ?? '',
@@ -244,6 +248,7 @@ async function generateDocumentPDF(
         phone: settings.phone ?? '',
         website: settings.website ?? '',
       }
+  const emitter = { ...emitterRaw, vatNumber: (vatApplicable && !tvaNonApplicable) ? emitterRaw.vatNumber : '' }
   const selectedBank: ResolvedBank = bankAccountId && bankAccountsList.length > 0
     ? (() => {
         const found = bankAccountsList.find((a) => a.id === bankAccountId)
@@ -377,6 +382,14 @@ async function generateDocumentPDF(
     { text: [recipient.postalCode, recipient.city].filter(Boolean).join(' ') || '—' },
     { text: recipient.country ? sanitize(recipient.country) : '—' },
     { text: recipient.siret ? `SIRET : ${recipient.siret}` : '—' },
+    ...(recipient.vatExempt
+      ? [
+          { text: 'Non assujetti à la TVA', bold: false },
+          { text: 'TVA non applicable, article 293 B du CGI', bold: false },
+        ]
+      : recipient.vatNumber
+        ? [{ text: `TVA : ${recipient.vatNumber}`, bold: false }]
+        : []),
     { text: recipient.email ? sanitize(recipient.email) : '—' },
   ]
   for (const line of destLines) {
@@ -401,6 +414,11 @@ async function generateDocumentPDF(
   }
   if (invoiceReference) {
     page.drawText(sanitize(invoiceReference), { x: MARGIN, y, size: 9, font, color: COLORS.secondary })
+    y -= 16
+  }
+  const docNote = (doc as { note?: string | null }).note
+  if (isInvoice && docNote && String(docNote).trim()) {
+    page.drawText(sanitize(String(docNote).trim().slice(0, 200)), { x: MARGIN, y, size: 9, font, color: COLORS.secondary })
     y -= 16
   }
 
@@ -523,7 +541,7 @@ async function generateDocumentPDF(
     yLeftCol -= 13
   }
   if (tvaNonApplicable) {
-    page.drawText('TVA non applicable, art. 293 B du CGI', { x: MARGIN, y: yLeftCol, size: 8, font, color: COLORS.light })
+    page.drawText(sanitize(vatExemptionReasonText), { x: MARGIN, y: yLeftCol, size: 8, font, color: COLORS.light })
     yLeftCol -= 14
   }
 
@@ -597,13 +615,13 @@ export async function generateCreditNotePDF(
   const doc = {
     number: creditNote.number,
     issueDate: creditNote.issueDate,
-    dueDate: null as string | null,
+    dueDate: (creditNote as { dueDate?: string | null }).dueDate ?? null,
     currency: creditNote.currency,
     totalHT: creditNote.totalHT,
     vatAmount: creditNote.vatAmount,
     totalTTC: creditNote.totalTTC,
     tvaNonApplicable: creditNote.tvaNonApplicable,
-    paymentTerms: null as string | null,
+    paymentTerms: (creditNote as { paymentTerms?: string | null }).paymentTerms ?? null,
     paymentMethod: creditNote.paymentMethod ?? null,
     bankAccountId: creditNote.bankAccountId ?? null,
     emitterProfileId: creditNote.emitterProfileId ?? null,

@@ -1,0 +1,3 @@
+{"sessionId":"4d4227","location":"app/api/companies/route.ts","message":"payload before create","data":{"dataKeys":["userId","type","name","legalName","address","postalCode","city","country","siret","vatNumber","vatExempt","email","phone","website"],"hasType":true,"typeValue":"societe"},"hypothesisId":"H3","timestamp":1773363922857}
+{"sessionId":"4d4227","location":"app/api/companies/route.ts","message":"schema Company block","data":{"schemaHasTypeInCompany":true,"cwd":"/Users/loannpicardblardone/Desktop/Site Web/Facturation"},"hypothesisId":"H2","timestamp":1773363922863}
+{"sessionId":"4d4227","location":"app/api/companies/route.ts","message":"prisma client resolve","data":{"prismaClientPath":"@prisma/client"},"hypothesisId":"H4","timestamp":1773363922863}
