@@ -112,6 +112,18 @@ export function buildBillingEmailHtml(data: BillingEmailData): string {
 </html>`
 }
 
+/** Bloc promotionnel MyFacturation360 (inscription, 7 jours offerts). À insérer en fin d’email si signupUrl fourni. */
+function promoBlock(signupUrl: string): string {
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #eeeeee;">
+                <tr>
+                  <td>
+                    <p style="margin: 0 0 12px 0; font-size: 14px; color: #404040; line-height: 1.5;">Vous souhaitez découvrir MyFacturation360, la solution de facturation pour auto-entrepreneurs, associations, particuliers et professionnels&nbsp;? Simple, rapide, gratuite ou à moins de 5&nbsp;€/mois&nbsp;: commencez à facturer en 5 minutes.</p>
+                    <p style="margin: 0; font-size: 14px; color: #404040;"><a href="${escapeHtml(signupUrl)}" style="color: #1a1a1a; font-weight: 600; text-decoration: underline;">Cliquez ici pour vous inscrire</a> et bénéficier de 7 jours offerts sur n&apos;importe quel abonnement si vous créez un compte via ce lien.</p>
+                  </td>
+                </tr>
+              </table>`
+}
+
 /** Données pour l’email devis avec lien de signature (consultation + signature client). */
 export interface QuoteSignLinkEmailData {
   companyName: string
@@ -122,6 +134,8 @@ export interface QuoteSignLinkEmailData {
   signaturePhone?: string | null
   footerAddress?: string | null
   footerSiret?: string | null
+  /** URL d’inscription pour le bloc promo (ex. https://example.com/signup) */
+  signupUrl?: string | null
 }
 
 export function buildQuoteSignLinkEmailHtml(data: QuoteSignLinkEmailData): string {
@@ -130,12 +144,14 @@ export function buildQuoteSignLinkEmailHtml(data: QuoteSignLinkEmailData): strin
   const sigPhone = data.signaturePhone || ''
   const footerAddr = data.footerAddress || ''
   const footerSiret = data.footerSiret || ''
+  const signupUrl = (data.signupUrl || '').trim()
+  const promoHtml = signupUrl ? promoBlock(signupUrl) : ''
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Votre devis – ${escapeHtml(company)}</title>
+  <title>Devis de la part de ${escapeHtml(company)} – Signature demandée</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #1a1a1a;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f5f5f5;">
@@ -150,10 +166,11 @@ export function buildQuoteSignLinkEmailHtml(data: QuoteSignLinkEmailData): strin
           <tr>
             <td style="padding: 32px 40px;">
               <p style="margin: 0 0 20px 0; font-size: 16px; color: #1a1a1a;">Bonjour ${escapeHtml(data.clientName)},</p>
-              <p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Vous avez reçu un devis de la part de <strong>${escapeHtml(company)}</strong>, envoyé via la plateforme MyFacturation360.</p>
+              <p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Vous recevez ce message car <strong>${escapeHtml(company)}</strong> vous a transmis un devis via la plateforme sécurisée MyFacturation360.</p>
+              <p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Ce devis contient le détail de la prestation ou des services proposés.</p>
               <p style="margin: 0 0 8px 0; font-size: 13px; color: #737373;">Montant du devis</p>
-              <p style="margin: 0 0 28px 0; font-size: 20px; font-weight: 600; color: #1a1a1a;">${escapeHtml(data.amount)}</p>
-              <p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Cliquez sur le bouton ci-dessous pour consulter et signer votre devis :</p>
+              <p style="margin: 0 0 24px 0; font-size: 20px; font-weight: 600; color: #1a1a1a;">${escapeHtml(data.amount)}</p>
+              <p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Pour consulter et signer votre devis en ligne, cliquez simplement sur le bouton ci-dessous :</p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <td align="center" style="padding: 16px 0;">
@@ -161,6 +178,8 @@ export function buildQuoteSignLinkEmailHtml(data: QuoteSignLinkEmailData): strin
                   </td>
                 </tr>
               </table>
+              <p style="margin: 24px 0 0 0; font-size: 14px; color: #404040;">La signature se fait directement en ligne et ne prend que quelques secondes.</p>
+              <p style="margin: 16px 0 0 0; font-size: 14px; color: #404040;">Si vous avez la moindre question concernant ce devis, vous pouvez contacter directement <strong>${escapeHtml(company)}</strong>.</p>
               <p style="margin: 24px 0 0 0; font-size: 13px; color: #737373;">Ou copiez ce lien dans votre navigateur :</p>
               <p style="margin: 4px 0 0 0; font-size: 13px; color: #404040; word-break: break-all;">${escapeHtml(data.signUrl)}</p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #eeeeee;">
@@ -169,10 +188,13 @@ export function buildQuoteSignLinkEmailHtml(data: QuoteSignLinkEmailData): strin
                     <p style="margin: 0 0 8px 0; font-size: 15px; color: #404040;">Cordialement,</p>
                     <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #1a1a1a;">${escapeHtml(company)}</p>
                     ${sigEmail ? `<p style="margin: 0 0 2px 0; font-size: 14px; color: #525252;"><a href="mailto:${escapeHtml(sigEmail)}" style="color: #404040; text-decoration: none;">${escapeHtml(sigEmail)}</a></p>` : ''}
-                    ${sigPhone ? `<p style="margin: 0; font-size: 14px; color: #525252;">${escapeHtml(sigPhone)}</p>` : ''}
+                    ${sigPhone ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #525252;">${escapeHtml(sigPhone)}</p>` : ''}
+                    <p style="margin: 16px 0 0 0; font-size: 12px; color: #737373;">Envoyé via MyFacturation360</p>
                   </td>
                 </tr>
               </table>
+              <p style="margin: 28px 0 0 0; font-size: 12px; color: #737373; line-height: 1.5;">Ce message a été envoyé automatiquement par la plateforme sécurisée MyFacturation360. Si vous pensez avoir reçu cet email par erreur, vous pouvez simplement l&apos;ignorer.</p>
+              ${promoHtml}
             </td>
           </tr>
           <tr>
@@ -198,28 +220,54 @@ export interface QuoteSignedNotificationData {
   signedAt: string
   quoteNumber: string
   companyName: string
+  /** URL d’inscription pour le bloc promo */
+  signupUrl?: string | null
 }
 
 export function buildQuoteSignedNotificationHtml(data: QuoteSignedNotificationData): string {
   const company = data.companyName || 'Myfacturation'
+  const signupUrl = (data.signupUrl || '').trim()
+  const promoHtml = signupUrl ? promoBlock(signupUrl) : ''
   return `<!DOCTYPE html>
 <html lang="fr">
-<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Devis signé</title></head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 15px; line-height: 1.5; color: #1a1a1a;">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Votre devis a été signé – ${escapeHtml(company)}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 15px; line-height: 1.5; color: #1a1a1a;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f5f5f5;">
     <tr>
       <td align="center" style="padding: 32px 20px;">
         <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
           <tr>
             <td style="padding: 32px 40px;">
-              <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #737373; text-transform: uppercase;">Devis signé</p>
+              <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #737373; text-transform: uppercase; letter-spacing: 0.05em;">Notification</p>
               <h1 style="margin: 0 0 24px 0; font-size: 20px; font-weight: 600; color: #1a1a1a;">Votre devis a été signé</h1>
               <p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Bonjour,</p>
-              <p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Votre devis a été signé par :</p>
-              <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1a1a1a;">${escapeHtml(data.clientName)}</p>
-              <p style="margin: 0 0 8px 0; font-size: 13px; color: #737373;">Date de signature : ${escapeHtml(data.signedAt)}</p>
-              <p style="margin: 24px 0 0 0; font-size: 14px; color: #404040;">Le devis signé est joint à cet email.</p>
-              <p style="margin: 16px 0 0 0; font-size: 14px; color: #737373;">Devis n° ${escapeHtml(data.quoteNumber)} – ${escapeHtml(company)}</p>
+              <p style="margin: 0 0 20px 0; font-size: 15px; color: #404040;">Nous vous informons que votre devis <strong>${escapeHtml(data.quoteNumber)}</strong> (${escapeHtml(company)}) a été signé par votre client.</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 24px 0; background-color: #fafafa; border-radius: 6px; border: 1px solid #eeeeee;">
+                <tr>
+                  <td style="padding: 20px 24px;">
+                    <p style="margin: 0 0 4px 0; font-size: 13px; color: #737373;">Signataire</p>
+                    <p style="margin: 0 0 16px 0; font-size: 15px; font-weight: 600; color: #1a1a1a;">${escapeHtml(data.clientName)}</p>
+                    <p style="margin: 0 0 4px 0; font-size: 13px; color: #737373;">Date de signature</p>
+                    <p style="margin: 0; font-size: 15px; color: #404040;">${escapeHtml(data.signedAt)}</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 0 0 24px 0; font-size: 15px; color: #404040;">Le devis signé est joint à cet email en pièce jointe (PDF). Vous pouvez le conserver pour vos archives.</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 28px; padding-top: 24px; border-top: 1px solid #eeeeee;">
+                <tr>
+                  <td>
+                    <p style="margin: 0 0 8px 0; font-size: 15px; color: #404040;">Cordialement,</p>
+                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #1a1a1a;">${escapeHtml(company)}</p>
+                    <p style="margin: 16px 0 0 0; font-size: 12px; color: #737373;">Envoyé via MyFacturation360</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 28px 0 0 0; font-size: 12px; color: #737373; line-height: 1.5;">Ce message a été envoyé automatiquement par la plateforme sécurisée MyFacturation360. Si vous pensez avoir reçu cet email par erreur, vous pouvez simplement l&apos;ignorer.</p>
+              ${promoHtml}
             </td>
           </tr>
         </table>

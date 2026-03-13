@@ -83,6 +83,8 @@ export async function POST(
   const { pdfLib, resources } = loadPdfBillingResources()
   const pdf = await generateQuotePDF(quote, settings, pdfLib, resources)
 
+  const signupUrl = baseUrl ? `${baseUrl}/signup` : ''
+
   const html = buildQuoteSignLinkEmailHtml({
     companyName,
     clientName: getRecipientName(quote),
@@ -92,11 +94,12 @@ export async function POST(
     signaturePhone: settings.phone,
     footerAddress: settings.address,
     footerSiret: settings.siret,
+    signupUrl: signupUrl || undefined,
   })
 
   const result = await sendMail({
     to,
-    subject: `Votre devis de ${companyName}`,
+    subject: `Devis de la part de ${companyName} – Signature demandée`,
     html,
     action: 'billing-quote-sign-link',
     attachments: [{ filename: `devis-${quote.number}.pdf`, content: pdf, mimeType: 'application/pdf' }],

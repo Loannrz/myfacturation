@@ -151,17 +151,20 @@ export async function POST(
   if (userAccountEmail && userAccountEmail !== toEmail && !ccList.includes(userAccountEmail)) ccList.push(userAccountEmail)
 
   if (toEmail || ccList.length > 0) {
+    const signupBase = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+    const signupUrl = signupBase ? `${signupBase}/signup` : ''
     const html = buildQuoteSignedNotificationHtml({
       clientName,
       signedAt: signedAtStr,
       quoteNumber: quote.number,
       companyName,
+      signupUrl: signupUrl || undefined,
     })
     await sendMail({
       from: process.env.QUOTE_SIGNED_EMAIL_FROM || 'noreply@myfacturation360.fr',
       to: toEmail || ccList[0]!,
       cc: ccList.length > 0 ? ccList : undefined,
-      subject: 'Votre devis a été signé',
+      subject: `Votre devis a été signé – ${companyName}`,
       html,
       action: 'quote-signed-notification',
       attachments: [{ filename: `devis-${quote.number}-signe.pdf`, content: pdfWithSignature, mimeType: 'application/pdf' }],
