@@ -1,5 +1,5 @@
 /**
- * Ajoute l'image de signature du client en bas de la dernière page du PDF devis.
+ * Ajoute l'image de signature du client et le nom du signataire en bas de la dernière page du PDF devis.
  * Utilise pdf-lib (chargé dynamiquement).
  */
 import { createRequire } from 'module'
@@ -7,21 +7,42 @@ import { createRequire } from 'module'
 const requireMod = createRequire(import.meta.url)
 
 const MARGIN = 56
-const SIGNATURE_MAX_WIDTH = 180
-const SIGNATURE_HEIGHT = 50
-const SIGNATURE_Y = 70
+const SIGNATURE_MAX_WIDTH = 280
+const SIGNATURE_HEIGHT = 90
+const SIGNATURE_Y = 72
+const SIGNER_NAME_FONT_SIZE = 10
+const SIGNER_NAME_Y_OFFSET = 8
 
+function sanitizeForPdf(text: string): string {
+  return String(text)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .trim()
+    .slice(0, 120) || ' '
+}
+
+interface PdfPage {
+  drawImage(image: unknown, opts: { x: number; y: number; width: number; height: number }): void
+  drawText(text: string, opts: { x: number; y: number; size: number; font: unknown; color: unknown }): void
+}
 interface PdfDoc {
-  getPages(): Array<{ drawImage(image: unknown, opts: { x: number; y: number; width: number; height: number }): void }>
+  getPages(): Array<PdfPage>
   embedPng(pngBytes: Uint8Array): Promise<{ scale(n: number): { width: number; height: number } }>
+  embedFont(font: unknown): Promise<unknown>
   save(): Promise<Uint8Array>
 }
 
 export async function addSignatureToQuotePdf(
   pdfBuffer: Buffer,
-  signaturePngBuffer: Buffer
+  signaturePngBuffer: Buffer,
+  signerName?: string | null
 ): Promise<Buffer> {
-  const pdfLib = requireMod('pdf-lib') as { PDFDocument: { load(bytes: Uint8Array): Promise<PdfDoc> } }
+  const pdfLib = requireMod('pdf-lib') as {
+    PDFDocument: { load(bytes: Uint8Array): Promise<PdfDoc> }
+    StandardFonts: { Helvetica: unknown }
+    rgb: (r: number, g: number, b: number) => unknown
+  }
   const doc = await pdfLib.PDFDocument.load(new Uint8Array(pdfBuffer))
   const pages = doc.getPages()
   if (pages.length === 0) return pdfBuffer
@@ -45,6 +66,19 @@ export async function addSignatureToQuotePdf(
   const y = SIGNATURE_Y
 
   lastPage.drawImage(pngImage, { x, y, width, height })
+
+  const nameToDraw = signerName ? sanitizeForPdf(signerName) : null
+  if (nameToDraw) {
+    const font = await doc.embedFont(pdfLib.StandardFonts.Helvetica)
+    const color = pdfLib.rgb(0.15, 0.15, 0.15)
+    lastPage.drawText(nameToDraw, {
+      x: MARGIN,
+      y: y - height - SIGNER_NAME_Y_OFFSET,
+      size: SIGNER_NAME_FONT_SIZE,
+      font,
+      color,
+    })
+  }
 
   const pdfBytes = await doc.save()
   return Buffer.from(pdfBytes)

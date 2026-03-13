@@ -92,7 +92,7 @@ export async function POST(
     return NextResponse.json({ error: 'Ce devis a expiré (date d\'échéance dépassée).' }, { status: 410 })
   }
 
-  let body: { signatureDataUrl?: string; signatureBase64?: string }
+  let body: { signatureDataUrl?: string; signatureBase64?: string; signerName?: string }
   try {
     body = await req.json()
   } catch {
@@ -101,6 +101,10 @@ export async function POST(
   const rawSignature = body.signatureDataUrl ?? body.signatureBase64
   if (!rawSignature || typeof rawSignature !== 'string') {
     return NextResponse.json({ error: 'Signature (image) manquante' }, { status: 400 })
+  }
+  const signerName = typeof body.signerName === 'string' ? body.signerName.trim().slice(0, 200) : null
+  if (!signerName || signerName.length === 0) {
+    return NextResponse.json({ error: 'Veuillez indiquer votre nom, prénom ou raison sociale.' }, { status: 400 })
   }
 
   let pngBuffer: Buffer
@@ -117,7 +121,7 @@ export async function POST(
   const settings = await getBillingSettings(quote.userId)
   const { pdfLib, resources } = loadPdfBillingResources()
   const pdfWithoutSignature = await generateQuotePDF(quote, settings, pdfLib, resources)
-  const pdfWithSignature = await addSignatureToQuotePdf(pdfWithoutSignature, pngBuffer)
+  const pdfWithSignature = await addSignatureToQuotePdf(pdfWithoutSignature, pngBuffer, signerName)
 
   await prisma.quote.update({
     where: { id: quote.id },
@@ -125,6 +129,7 @@ export async function POST(
       status: 'signed',
       signedAt,
       signatureImageBase64: signatureBase64,
+      signerName,
     },
   })
 

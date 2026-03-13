@@ -224,6 +224,7 @@ model Quote {
   sentAt           DateTime?
   signToken        String?      @unique
   signatureImageBase64 String?
+  signerName       String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   deletedAt        DateTime?

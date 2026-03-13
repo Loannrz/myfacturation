@@ -27,6 +27,7 @@ export default function QuoteSignPage() {
   const [error, setError] = useState<string | null>(null)
   const [signing, setSigning] = useState(false)
   const [signed, setSigned] = useState(false)
+  const [signerName, setSignerName] = useState('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawingRef = useRef(false)
   const lastPosRef = useRef<{ x: number; y: number } | null>(null)
@@ -141,11 +142,16 @@ export default function QuoteSignPage() {
       alert('Veuillez signer dans la zone ci-dessous avant de valider.')
       return
     }
+    const name = signerName.trim()
+    if (!name) {
+      alert('Veuillez indiquer votre nom, prénom ou raison sociale.')
+      return
+    }
     setSigning(true)
     fetch(`/api/quote/sign/${encodeURIComponent(token)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ signatureDataUrl: dataUrl }),
+      body: JSON.stringify({ signatureDataUrl: dataUrl, signerName: name }),
     })
       .then((r) => {
         if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Erreur') })
@@ -154,7 +160,7 @@ export default function QuoteSignPage() {
       .then(() => setSigned(true))
       .catch((e) => alert(e.message || 'Erreur lors de l\'enregistrement de la signature'))
       .finally(() => setSigning(false))
-  }, [token, quote])
+  }, [token, quote, signerName])
 
   if (loading) {
     return (
@@ -201,6 +207,20 @@ export default function QuoteSignPage() {
 
         <section className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-6">
           <h2 className="text-sm font-medium text-[var(--foreground)] mb-3">Signature</h2>
+          <div className="mb-4">
+            <label htmlFor="signer-name" className="block text-sm font-medium text-[var(--foreground)] mb-1">
+              Nom, prénom ou raison sociale <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="signer-name"
+              type="text"
+              value={signerName}
+              onChange={(e) => setSignerName(e.target.value)}
+              placeholder="Ex. Jean Dupont ou SARL Ma Société"
+              className="w-full px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--muted)]"
+              maxLength={200}
+            />
+          </div>
           <p className="text-sm text-[var(--muted)] mb-4">Signez dans la zone ci-dessous (doigt, stylet ou souris).</p>
           <div
             className="border-2 border-dashed border-[var(--border)] rounded-lg bg-white overflow-hidden touch-none"
