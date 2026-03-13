@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { logBillingActivity } from '@/lib/billing-activity'
 import { whereNotDeleted } from '@/lib/soft-delete'
-import { getBillingSettings, getNextInvoiceNumber, parseBankAccounts, parseEmitterProfiles } from '@/lib/billing-settings'
+import { getBillingSettings, parseBankAccounts, parseEmitterProfiles } from '@/lib/billing-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -116,15 +116,6 @@ export async function PUT(
   return NextResponse.json(quote)
 }
 
-function formatDateFR(iso: string): string {
-  const parts = iso.trim().split(/[-T]/)
-  if (parts.length >= 3) {
-    const [y, m, d] = parts
-    return `${d!.padStart(2, '0')}/${m!.padStart(2, '0')}/${y}`
-  }
-  return iso
-}
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -144,62 +135,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Statut invalide' }, { status: 400 })
   }
   const data: { status: string; signedAt?: Date | null } = { status: newStatus }
-  let createdInvoice: { id: string; number: string } | null = null
   if (newStatus === 'signed') {
     data.signedAt = body.signedDate ? new Date(body.signedDate) : existing.signedAt ?? new Date()
-    const signedDateStr = data.signedAt.toISOString().slice(0, 10)
-    const existingInvoice = await prisma.invoice.findFirst({
-      where: { quoteId: id, userId: session.id },
-    })
-    if (!existingInvoice) {
-      const refLine = `Facture venant du devis ${existing.number} émis le ${formatDateFR(existing.issueDate)} signé le ${formatDateFR(signedDateStr)}`
-      const number = await getNextInvoiceNumber(session.id)
-      const invoice = await prisma.invoice.create({
-        data: {
-          userId: session.id,
-          number,
-          status: 'draft',
-          clientId: existing.clientId,
-          companyId: existing.companyId,
-          quoteId: existing.id,
-          issueDate: existing.issueDate,
-          dueDate: existing.dueDate,
-          currency: existing.currency,
-          paymentTerms: existing.paymentTerms,
-          paymentMethod: existing.paymentMethod,
-          bankAccountId: existing.bankAccountId,
-          emitterProfileId: existing.emitterProfileId,
-          totalHT: existing.totalHT,
-          vatAmount: existing.vatAmount,
-          totalTTC: existing.totalTTC,
-          tvaNonApplicable: existing.tvaNonApplicable,
-          lines: {
-            create: [
-              {
-                type: 'service',
-                description: refLine,
-                quantity: 1,
-                unitPrice: 0,
-                vatRate: 0,
-                discount: 0,
-                total: 0,
-              },
-              ...existing.lines.map((l) => ({
-                type: l.type,
-                description: l.description,
-                quantity: l.quantity,
-                unitPrice: l.unitPrice,
-                vatRate: l.vatRate,
-                discount: l.discount,
-                total: l.total,
-              })),
-            ],
-          },
-        },
-      })
-      createdInvoice = { id: invoice.id, number: invoice.number }
-      await logBillingActivity(session.id, 'invoice created', 'invoice', invoice.id, { number: invoice.number, fromQuote: true })
-    }
   } else {
     data.signedAt = null
   }
@@ -209,7 +146,7 @@ export async function PATCH(
     include: { client: true, company: true, lines: true },
   })
   await logBillingActivity(session.id, 'quote status updated', 'quote', quote.id, { status: newStatus })
-  return NextResponse.json({ ...quote, createdInvoice: createdInvoice ?? undefined })
+  return NextResponse.json(quote)
 }
 
 export async function DELETE(

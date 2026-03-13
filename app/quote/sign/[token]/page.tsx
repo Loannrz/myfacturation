@@ -184,7 +184,7 @@ export default function QuoteSignPage() {
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <p className="text-emerald-600 dark:text-emerald-400 font-semibold text-lg">Devis signé avec succès</p>
-          <p className="text-[var(--muted)] mt-2">L&apos;émetteur a été notifié et recevra le devis signé par email.</p>
+          <p className="text-[var(--muted)] mt-2">Votre signature a bien été enregistrée.</p>
         </div>
       </div>
     )

@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Receipt, Download, Search, AlertCircle, Pencil, Trash2 } from 'lucide-react'
+import { Receipt, Download, Search, AlertCircle, Pencil, Trash2, Send } from 'lucide-react'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
 
 type Invoice = {
@@ -16,8 +16,8 @@ type Invoice = {
   dueDate: string | null
   paidAt: string | null
   overdueDays?: number
-  client: { firstName: string; lastName: string; companyName: string | null } | null
-  company: { name: string } | null
+  client: { firstName: string; lastName: string; companyName: string | null; email?: string | null } | null
+  company: { name: string; email?: string | null } | null
 }
 
 function formatDateFR(iso: string | null | undefined): string {
@@ -80,6 +80,45 @@ export default function FacturesPage() {
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
   const [clientFilter, setClientFilter] = useState('')
   const [companyFilter, setCompanyFilter] = useState('')
+  const [confirmSendInvoice, setConfirmSendInvoice] = useState<Invoice | null>(null)
+  const [sendingId, setSendingId] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
+
+  const clientEmail = (inv: Invoice): string => {
+    const e = inv.client?.email ?? inv.company?.email
+    return (typeof e === 'string' ? e.trim() : '') || ''
+  }
+
+  const sendInvoiceEmail = (inv: Invoice) => {
+    if (!clientEmail(inv)) {
+      setSendError('Veuillez renseigner l\'email du client pour envoyer la facture.')
+      return
+    }
+    setConfirmSendInvoice(inv)
+  }
+
+  const confirmSendInvoiceEmail = async () => {
+    const inv = confirmSendInvoice
+    if (!inv) return
+    setConfirmSendInvoice(null)
+    const email = clientEmail(inv)
+    if (!email) return
+    setSendError(null)
+    setSendingId(inv.id)
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}/send-email`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSendError(data.error || 'L\'email n\'a pas pu être envoyé.')
+        return
+      }
+      setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'sent' } : i)))
+    } finally {
+      setSendingId(null)
+    }
+  }
+
+  const cancelSendInvoice = () => setConfirmSendInvoice(null)
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -152,6 +191,29 @@ export default function FacturesPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
+      {confirmSendInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="confirm-send-invoice-title">
+          <div className="bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-xl max-w-sm w-full p-5">
+            <p id="confirm-send-invoice-title" className="text-sm text-[var(--foreground)]">
+              Vous êtes sûr d&apos;envoyer la facture à cette adresse email&nbsp;:
+            </p>
+            <p className="mt-2 text-lg font-semibold text-[var(--foreground)] break-all">{clientEmail(confirmSendInvoice)}</p>
+            <p className="mt-2 text-xs text-[var(--muted)]">La facture sera jointe au mail (PDF).</p>
+            <div className="mt-5 flex gap-3 justify-end">
+              <button type="button" onClick={cancelSendInvoice} className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">Non</button>
+              <button type="button" onClick={() => confirmSendInvoiceEmail()} className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">Oui</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sendError && (
+        <div className="mb-4 p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-sm flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {sendError}
+        </div>
+      )}
+
       {canCreate === false && (
         <div className="mb-6 p-4 rounded-xl border border-amber-500/50 bg-amber-500/10 flex gap-3">
           <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -310,6 +372,16 @@ export default function FacturesPage() {
                   </td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => sendInvoiceEmail(inv)}
+                        disabled={!!sendingId || !clientEmail(inv)}
+                        title={!clientEmail(inv) ? 'Veuillez renseigner l\'email du client.' : 'Envoyer la facture par email (PDF en pièce jointe)'}
+                        className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span className="hidden sm:inline">Envoyer</span>
+                      </button>
                       <Link
                         href={`/factures/${inv.id}/modifier`}
                         className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -326,36 +398,38 @@ export default function FacturesPage() {
                       >
                         <Download className="w-4 h-4" />
                       </a>
-                      <select
-                        title="Changer le statut"
-                        value=""
-                        onChange={(e) => {
-                          const v = e.target.value
-                          e.target.value = ''
-                          if (!v) return
-                          if (v === 'paid') openPaidDatePicker(inv.id)
-                          else updateInvoiceStatus(inv.id, v)
-                        }}
-                        disabled={!!updatingId || showPaidDateFor === inv.id}
-                        className="text-xs py-1 px-2 border border-[var(--border)] rounded bg-[var(--background)]"
-                      >
-                        <option value="">Statut</option>
-                        <option value="draft">Brouillon</option>
-                        <option value="sent">Envoyée</option>
-                        <option value="paid">Payée</option>
-                        <option value="pending">En attente</option>
-                        <option value="late">En retard</option>
-                        <option value="cancelled">Annulée</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => deleteInvoice(inv.id)}
-                        disabled={!!deletingId}
-                        className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-red-600 disabled:opacity-50"
-                        title="Supprimer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="inline-flex items-center gap-2 shrink-0">
+                        <select
+                          title="Changer le statut"
+                          value=""
+                          onChange={(e) => {
+                            const v = e.target.value
+                            e.target.value = ''
+                            if (!v) return
+                            if (v === 'paid') openPaidDatePicker(inv.id)
+                            else updateInvoiceStatus(inv.id, v)
+                          }}
+                          disabled={!!updatingId || showPaidDateFor === inv.id}
+                          className="text-xs py-1 px-2 border border-[var(--border)] rounded bg-[var(--background)]"
+                        >
+                          <option value="">Statut</option>
+                          <option value="draft">Brouillon</option>
+                          <option value="sent">Envoyée</option>
+                          <option value="paid">Payée</option>
+                          <option value="pending">En attente</option>
+                          <option value="late">En retard</option>
+                          <option value="cancelled">Annulée</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => deleteInvoice(inv.id)}
+                          disabled={!!deletingId}
+                          className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-red-600 disabled:opacity-50"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </td>
                 </tr>

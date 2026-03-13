@@ -29,6 +29,12 @@ export async function POST(
   })
   if (!quote) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 })
 
+  const existingInvoice = await prisma.invoice.findFirst({
+    where: { quoteId: quote.id, userId: session.id, ...whereNotDeleted },
+    include: { client: true, company: true, lines: true },
+  })
+  if (existingInvoice) return NextResponse.json(existingInvoice)
+
   const body = await req.json().catch(() => ({}))
   const signedDateStr = (body.signedDate as string) || new Date().toISOString().slice(0, 10)
   const signedAt = new Date(signedDateStr)

@@ -66,6 +66,8 @@ export default function DevisPage() {
   const [signedDateValue, setSignedDateValue] = useState(() => new Date().toISOString().slice(0, 10))
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [confirmSendQuote, setConfirmSendQuote] = useState<Quote | null>(null)
+  const [creatingInvoiceId, setCreatingInvoiceId] = useState<string | null>(null)
   const [clients, setClients] = useState<{ id: string; firstName: string; lastName: string; companyName: string | null }[]>([])
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
   const [clientFilter, setClientFilter] = useState('')
@@ -108,12 +110,22 @@ export default function DevisPage() {
     return (typeof e === 'string' ? e.trim() : '') || ''
   }
 
-  const sendQuoteEmail = async (quote: Quote) => {
+  const sendQuoteEmail = (quote: Quote) => {
+    if (quote.status === 'signed') return
     const email = clientEmail(quote)
     if (!email) {
       setSendError('Veuillez renseigner l\'email du client pour envoyer le devis.')
       return
     }
+    setConfirmSendQuote(quote)
+  }
+
+  const confirmSendQuoteEmail = async () => {
+    const quote = confirmSendQuote
+    if (!quote) return
+    setConfirmSendQuote(null)
+    const email = clientEmail(quote)
+    if (!email) return
     setSendError(null)
     setSendingId(quote.id)
     try {
@@ -130,6 +142,10 @@ export default function DevisPage() {
     }
   }
 
+  const cancelSendQuote = () => {
+    setConfirmSendQuote(null)
+  }
+
   const updateQuoteStatus = async (id: string, status: string, signedDate?: string) => {
     setUpdatingId(id)
     setShowSignedDateFor(null)
@@ -140,7 +156,6 @@ export default function DevisPage() {
       if (res.ok) {
         const updated = await res.json()
         setQuotes((prev) => prev.map((qu) => (qu.id === id ? { ...qu, status: updated.status, signedAt: updated.signedAt } : qu)))
-        if (updated.createdInvoice) router.push(`/factures?created=${updated.createdInvoice.id}`)
       }
     } finally {
       setUpdatingId(null)
@@ -166,6 +181,28 @@ export default function DevisPage() {
     }
   }
 
+  const createInvoiceFromSignedQuote = async (quote: Quote) => {
+    if (quote.status !== 'signed') return
+    setCreatingInvoiceId(quote.id)
+    try {
+      const signedDate = quote.signedAt ? quote.signedAt.slice(0, 10) : new Date().toISOString().slice(0, 10)
+      const res = await fetch(`/api/quotes/${quote.id}/convert-to-invoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signedDate }),
+      })
+      if (res.ok) {
+        const invoice = await res.json()
+        router.push(`/factures/${invoice.id}/modifier`)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert((data as { error?: string }).error || 'Erreur lors de la création de la facture.')
+      }
+    } finally {
+      setCreatingInvoiceId(null)
+    }
+  }
+
   const openSignedDatePicker = (id: string) => {
     setSignedDateValue(new Date().toISOString().slice(0, 10))
     setShowSignedDateFor(id)
@@ -184,6 +221,33 @@ export default function DevisPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
+      {confirmSendQuote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="confirm-send-title">
+          <div className="bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-xl max-w-sm w-full p-5">
+            <p id="confirm-send-title" className="text-sm text-[var(--foreground)]">
+              Vous êtes sûr d&apos;envoyer le devis à cette adresse email&nbsp;:
+            </p>
+            <p className="mt-2 text-lg font-semibold text-[var(--foreground)] break-all">{clientEmail(confirmSendQuote)}</p>
+            <div className="mt-5 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={cancelSendQuote}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+              >
+                Non
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmSendQuoteEmail()}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+              >
+                Oui
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {canCreate === false && (
         <div className="mb-6 p-4 rounded-xl border border-amber-500/50 bg-amber-500/10 flex gap-3">
           <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -305,14 +369,6 @@ export default function DevisPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => convertToInvoice(quote.id, signedDateValue)}
-                          disabled={!!updatingId}
-                          className="text-xs py-1 px-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                        >
-                          Créer facture
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => setShowSignedDateFor(null)}
                           className="text-xs py-1 px-2 rounded border border-[var(--border)] hover:bg-[var(--border)]/20"
                         >
@@ -320,12 +376,24 @@ export default function DevisPage() {
                         </button>
                       </div>
                     ) : (
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass[quote.status] ?? 'bg-[var(--border)]/30 text-[var(--muted)]'}`}>
-                        {statusLabels[quote.status] ?? quote.status}
-                        {quote.status === 'signed' && quote.signedAt && (
-                          <span className="ml-1.5 font-normal opacity-90">le {formatDateFR(quote.signedAt)}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass[quote.status] ?? 'bg-[var(--border)]/30 text-[var(--muted)]'}`}>
+                          {statusLabels[quote.status] ?? quote.status}
+                          {quote.status === 'signed' && quote.signedAt && (
+                            <span className="ml-1.5 font-normal opacity-90">le {formatDateFR(quote.signedAt)}</span>
+                          )}
+                        </span>
+                        {quote.status === 'signed' && (
+                          <button
+                            type="button"
+                            onClick={() => createInvoiceFromSignedQuote(quote)}
+                            disabled={!!creatingInvoiceId}
+                            className="text-xs py-1 px-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            {creatingInvoiceId === quote.id ? 'Création…' : 'Créer la facture'}
+                          </button>
                         )}
-                      </span>
+                      </div>
                     )}
                   </td>
                   <td className="py-3 px-4 text-sm text-[var(--muted)]">{quote.dueDate || '—'}</td>
@@ -334,8 +402,8 @@ export default function DevisPage() {
                       <button
                         type="button"
                         onClick={() => sendQuoteEmail(quote)}
-                        disabled={!!sendingId || !clientEmail(quote)}
-                        title={!clientEmail(quote) ? 'Veuillez renseigner l\'email du client pour envoyer le devis.' : 'Envoyer le devis par email'}
+                        disabled={!!sendingId || !clientEmail(quote) || quote.status === 'signed'}
+                        title={quote.status === 'signed' ? 'Devis déjà signé, envoi impossible.' : !clientEmail(quote) ? 'Veuillez renseigner l\'email du client pour envoyer le devis.' : 'Envoyer le devis par email'}
                         className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Send className="w-4 h-4" />

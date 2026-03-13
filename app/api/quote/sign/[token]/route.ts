@@ -1,23 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { whereNotDeleted } from '@/lib/soft-delete'
-import { getBillingSettings, parseEmitterProfiles } from '@/lib/billing-settings'
+import { getBillingSettings } from '@/lib/billing-settings'
 import { generateQuotePDF } from '@/lib/billing-pdf'
 import { loadPdfBillingResources } from '@/lib/load-pdf-billing'
 import { addSignatureToQuotePdf } from '@/lib/quote-pdf-signature'
-import { sendMail } from '@/lib/smtp'
-import { buildQuoteSignedNotificationHtml } from '@/lib/billing-email-template'
 
 export const dynamic = 'force-dynamic'
-
-function getRecipientName(quote: { client: { firstName: string; lastName: string; companyName: string | null } | null; company: { name: string; legalName: string | null } | null }): string {
-  if (quote.company) return quote.company.legalName || quote.company.name
-  if (quote.client) {
-    const name = [quote.client.firstName, quote.client.lastName].filter(Boolean).join(' ')
-    return name || quote.client.companyName || 'Client'
-  }
-  return 'Client'
-}
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -78,7 +67,7 @@ export async function POST(
 
   const quote = await prisma.quote.findFirst({
     where: { signToken: token.trim(), ...whereNotDeleted },
-    include: { client: true, company: true, lines: true, user: { select: { email: true } } },
+    include: { client: true, company: true, lines: true },
   })
   if (!quote) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 })
   if (quote.status === 'signed') {
@@ -132,47 +121,6 @@ export async function POST(
       signerName,
     },
   })
-
-  const companyName = settings.companyName || 'Myfacturation'
-  const clientName = getRecipientName(quote)
-  const signedAtStr = signedAt.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
-
-  const profilesList = parseEmitterProfiles(settings.emitterProfiles ?? null)
-  const emitterProfile = quote.emitterProfileId && profilesList.length > 0
-    ? profilesList.find((p) => p.id === quote.emitterProfileId)
-    : null
-  const establishmentEmail = (emitterProfile?.email ?? '').trim()
-  const userAccountEmail = (quote.user?.email ?? '').trim()
-  const signerEmail = (quote.client?.email ?? quote.company?.email ?? '').trim()
-
-  const isNoreply = (e: string) => !e || e.toLowerCase().includes('noreply')
-  const recipients: string[] = []
-  if (establishmentEmail && !isNoreply(establishmentEmail)) recipients.push(establishmentEmail)
-  if (userAccountEmail && !isNoreply(userAccountEmail) && !recipients.includes(userAccountEmail)) recipients.push(userAccountEmail)
-  if (signerEmail && !isNoreply(signerEmail) && !recipients.includes(signerEmail)) recipients.push(signerEmail)
-  const toEmail = recipients[0]
-  const ccList = recipients.length > 1 ? recipients.slice(1) : []
-
-  if (toEmail) {
-    const signupBase = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
-    const signupUrl = signupBase ? `${signupBase}/signup` : ''
-    const html = buildQuoteSignedNotificationHtml({
-      clientName,
-      signedAt: signedAtStr,
-      quoteNumber: quote.number,
-      companyName,
-      signupUrl: signupUrl || undefined,
-    })
-    await sendMail({
-      from: process.env.QUOTE_SIGNED_EMAIL_FROM || 'noreply@myfacturation360.fr',
-      to: toEmail,
-      cc: ccList.length > 0 ? ccList : undefined,
-      subject: `Votre devis a été signé – ${companyName}`,
-      html,
-      action: 'quote-signed-notification',
-      attachments: [{ filename: `devis-${quote.number}-signe.pdf`, content: pdfWithSignature, mimeType: 'application/pdf' }],
-    })
-  }
 
   return NextResponse.json({ ok: true, signedAt: signedAt.toISOString() })
 }

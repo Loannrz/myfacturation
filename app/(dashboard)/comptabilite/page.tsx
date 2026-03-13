@@ -97,9 +97,9 @@ const statusLabels: Record<string, string> = {
   completed: 'Effectué',
 }
 
-type ChartPoint = { month: string; label: string; revenue: number; expenses: number; creditNotes: number }
+type ChartPoint = { month: string; label: string; paidInvoices: number; expenses: number; creditNotes: number; expensesTotal: number; _padding?: boolean }
 
-/** Tooltip graphique Revenus + Dépenses avec détail avoir / dépenses */
+/** Tooltip graphique Revenus + Dépenses : factures payées (vert), dépenses + avoirs (rouge), revenu net */
 function RevenueExpensesChartTooltip({
   active,
   payload,
@@ -112,17 +112,16 @@ function RevenueExpensesChartTooltip({
   if (!active || !payload?.length || !label) return null
   const point = payload[0]?.payload
   if (!point) return null
-  const net = point.revenue - point.expenses
-  const depensesTotal = point.creditNotes + point.expenses
+  const net = point.paidInvoices - point.expensesTotal
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-lg px-4 py-3 text-sm min-w-[220px]">
       <p className="font-medium text-[var(--foreground)] border-b border-[var(--border)]/50 pb-1.5 mb-2">{label}</p>
       <div className="space-y-1">
         <p className="text-[var(--muted)]">
-          Entrées (revenus nets) : <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatEuro(point.revenue)}</span>
+          Revenus (factures payées) : <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatEuro(point.paidInvoices)}</span>
         </p>
         <p className="text-[var(--muted)]">
-          Dépenses : <span className="font-semibold text-rose-600 dark:text-rose-400">{formatEuro(depensesTotal)}</span>
+          Dépenses + avoirs : <span className="font-semibold text-rose-600 dark:text-rose-400">{formatEuro(point.expensesTotal)}</span>
           {(point.creditNotes > 0 || point.expenses > 0) && (
             <span className="block text-xs mt-0.5 text-[var(--muted)]">
               dont {formatEuro(point.creditNotes)} avoir, {formatEuro(point.expenses)} dépenses
@@ -130,7 +129,8 @@ function RevenueExpensesChartTooltip({
           )}
         </p>
         <p className="text-[var(--muted)] pt-1 border-t border-[var(--border)]/50 mt-1.5">
-          Total (solde) : <span className={`font-semibold ${net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatEuro(net)}</span>
+          Revenu net : <span className={`font-semibold ${net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatEuro(net)}</span>
+          <span className="block text-xs mt-0.5 text-[var(--muted)]">factures payées − dépenses − avoirs</span>
         </p>
       </div>
     </div>
@@ -300,6 +300,7 @@ export default function ComptabilitePage() {
     to: string
     summary: OverviewSummary
     revenueByMonth: { month: string; label: string; revenue: number }[]
+    paidInvoicesByMonth?: { month: string; label: string; amount: number }[]
     revenueByYear: { year: number; revenue: number }[]
     expensesByMonth: { month: string; label: string; amount: number }[]
     creditNotesByMonth?: { month: string; amount: number }[]
@@ -356,25 +357,46 @@ export default function ComptabilitePage() {
     return `${MONTHS[periodMonth - 1]} ${periodYear}`
   }, [periodYear, periodMonth])
 
-  /** Données fusionnées pour le graphique Revenus + Dépenses (avec avoir par mois) */
+  /** Données fusionnées pour le graphique : vert = factures payées, rouge = dépenses + avoirs, revenu net = factures − dépenses − avoirs */
   const chartData = useMemo((): ChartPoint[] => {
     if (!overview?.revenueByMonth?.length) return []
     const rev = overview.revenueByMonth
+    const paidMap = new Map((overview.paidInvoicesByMonth ?? []).map((x) => [x.month, x.amount]))
     const exp = overview.expensesByMonth ?? []
     const cnMap = new Map((overview.creditNotesByMonth ?? []).map((x) => [x.month, x.amount]))
     return rev.map((r) => {
+      const paidAmount = paidMap.get(r.month) ?? 0
       const expItem = exp.find((e) => e.month === r.month)
       const expensesAmount = expItem?.amount ?? 0
       const creditNotesAmount = cnMap.get(r.month) ?? 0
       return {
         month: r.month,
         label: r.label,
-        revenue: r.revenue,
+        paidInvoices: paidAmount,
         expenses: expensesAmount,
         creditNotes: creditNotesAmount,
+        expensesTotal: expensesAmount + creditNotesAmount,
       }
     })
   }, [overview])
+
+  /** Même données avec points de padding (mois -1 et +1) pour que la ligne s’étende visuellement quand un seul mois est sélectionné, sans afficher ces mois. */
+  const chartDataWithPadding = useMemo((): ChartPoint[] => {
+    if (!chartData.length) return []
+    if (chartData.length >= 6) return chartData
+    const first = { ...chartData[0], label: '', _padding: true }
+    const last = { ...chartData[chartData.length - 1], label: '', _padding: true }
+    return [first, ...chartData, last]
+  }, [chartData])
+
+  /** Dépenses par catégorie avec padding pour étendre les lignes visuellement quand peu de mois. */
+  const expensesByCategoryWithPadding = useMemo(() => {
+    const data = overview?.expensesByCategoryByMonth ?? []
+    if (!data.length || data.length >= 6) return data
+    const first = { ...data[0], label: '', _padding: true } as typeof data[0] & { _padding?: boolean }
+    const last = { ...data[data.length - 1], label: '', _padding: true } as typeof data[0] & { _padding?: boolean }
+    return [first, ...data, last]
+  }, [overview?.expensesByCategoryByMonth])
 
   const fetchOverview = useCallback(() => {
     const params = new URLSearchParams()
@@ -580,7 +602,7 @@ export default function ComptabilitePage() {
                 <span className="text-sm text-[var(--muted)]">CA net</span>
                 <Receipt className="w-5 h-5 text-[var(--muted)]" />
               </div>
-              <p className="mt-2 text-xl font-semibold text-emerald-600 dark:text-emerald-400">{formatEuro(summary.totalRevenue)}</p>
+              <p className={`mt-2 text-xl font-semibold ${summary.totalRevenue >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatEuro(summary.totalRevenue)}</p>
               <p className="text-xs text-[var(--muted)] mt-0.5">
                 {summary.revenueEvolution != null && (
                   <span className={summary.revenueEvolution >= 0 ? 'text-emerald-500' : 'text-red-500'}>
@@ -687,8 +709,8 @@ export default function ComptabilitePage() {
             className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--background)] text-sm min-w-[180px]"
           >
             <option value="all">Toutes les courbes</option>
-            <option value="revenue">Entrées uniquement</option>
-            <option value="expenses">Dépenses uniquement</option>
+            <option value="revenue">Revenus (factures payées) uniquement</option>
+            <option value="expenses">Dépenses + avoirs uniquement</option>
           </select>
         </div>
         <p className="text-sm font-medium text-[var(--foreground)] w-full mt-2 pt-2 border-t border-[var(--border)]">
@@ -703,7 +725,7 @@ export default function ComptabilitePage() {
           <div className="h-[280px]">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                <AreaChart data={chartDataWithPadding} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
                   <defs>
                     <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="rgb(16 185 129)" stopOpacity={0.4} />
@@ -715,14 +737,19 @@ export default function ComptabilitePage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10 }}
+                    stroke="var(--muted)"
+                    tickFormatter={(value, index) => (chartDataWithPadding[index] as ChartPoint)?._padding ? '' : value}
+                  />
                   <YAxis hide domain={['auto', 'auto']} />
                   <Tooltip content={<RevenueExpensesChartTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
                   {(chartCurveFilter === 'all' || chartCurveFilter === 'revenue') && (
-                    <Area type="monotone" dataKey="revenue" name="Entrées" stroke="rgb(16 185 129)" strokeWidth={2} fill="url(#revGrad)" />
+                    <Area type="monotone" dataKey="paidInvoices" name="Revenus (factures payées)" stroke="rgb(16 185 129)" strokeWidth={2} fill="url(#revGrad)" />
                   )}
                   {(chartCurveFilter === 'all' || chartCurveFilter === 'expenses') && (
-                    <Area type="monotone" dataKey="expenses" name="Dépenses" stroke="rgb(244 63 94)" strokeWidth={2} fill="url(#expGrad)" />
+                    <Area type="monotone" dataKey="expensesTotal" name="Dépenses + avoirs" stroke="rgb(244 63 94)" strokeWidth={2} fill="url(#expGrad)" />
                   )}
                 </AreaChart>
               </ResponsiveContainer>
@@ -731,7 +758,7 @@ export default function ComptabilitePage() {
             )}
           </div>
           <p className="text-xs text-[var(--muted)] mt-4 pt-3 border-t border-[var(--border)]/50">
-            Courbe verte = Entrées (revenus nets). Courbe rouge = Dépenses.
+            Courbe verte = Revenus (factures payées). Courbe rouge = Dépenses + avoirs. Revenu net = factures payées − dépenses − avoirs.
           </p>
         </div>
       </section>
@@ -739,7 +766,7 @@ export default function ComptabilitePage() {
       {/* ——— 2b. Dépenses par catégorie (lignes) ——— */}
       {overview?.expensesByCategoryByMonth && overview.expensesByCategoryByMonth.length > 0 && (() => {
         const first = overview.expensesByCategoryByMonth[0]
-        const categoryKeys = Object.keys(first).filter((k) => k !== 'month' && k !== 'label') as string[]
+        const categoryKeys = Object.keys(first).filter((k) => k !== 'month' && k !== 'label' && k !== '_padding') as string[]
         const COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6', '#a855f7']
         return (
           <section>
@@ -747,9 +774,14 @@ export default function ComptabilitePage() {
             <div className="p-6 rounded-xl border border-[var(--border)] bg-[var(--background)]">
               <div className="h-[320px]">
                 <ResponsiveContainer width="100%" height={320}>
-                  <LineChart data={overview.expensesByCategoryByMonth} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+                  <LineChart data={expensesByCategoryWithPadding} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10 }}
+                      stroke="var(--muted)"
+                      tickFormatter={(value, index) => (expensesByCategoryWithPadding[index] as { _padding?: boolean })?._padding ? '' : value}
+                    />
                     <YAxis hide domain={['auto', 'auto']} />
                     <Tooltip content={<ExpensesByCategoryTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
                     <Legend />

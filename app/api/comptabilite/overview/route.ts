@@ -140,17 +140,18 @@ export async function GET(req: NextRequest) {
   const totalPaidAmountPrev = paidInvoicesPrev.reduce((s, i) => s + i.totalTTC, 0)
   const totalCreditNotes = creditNotes.reduce((s, c) => s + c.totalTTC, 0)
   const totalCreditNotesPrev = creditNotesPrev.reduce((s, c) => s + c.totalTTC, 0)
-  const totalRevenue = Math.max(0, totalPaidAmount - totalCreditNotes)
-  const totalRevenuePrev = Math.max(0, totalPaidAmountPrev - totalCreditNotesPrev)
+  const totalRevenue = totalPaidAmount - totalCreditNotes
+  const totalRevenuePrev = totalPaidAmountPrev - totalCreditNotesPrev
   const totalUnpaidAmount = unpaidInvoices.reduce((s, i) => s + i.totalTTC, 0)
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
   const totalExpensesPrev = expensesPrev.reduce((s, e) => s + e.amount, 0)
   const netProfit = totalRevenue - totalExpenses
   const netProfitPrev = totalRevenuePrev - totalExpensesPrev
 
+  /** Évolution en % : signe cohérent (baisse = négatif, hausse = positif). Utilise |previous| pour que -100 → -2300 donne un % négatif. */
   function evolution(current: number, previous: number): number | null {
-    if (previous === 0) return current > 0 ? 100 : null
-    return Math.round(((current - previous) / previous) * 100)
+    if (previous === 0) return current !== 0 ? (current > 0 ? 100 : -100) : null
+    return Math.round(((current - previous) / Math.abs(previous)) * 100)
   }
 
   // Plage des mois à afficher dans les graphiques (alignée sur la période from/to)
@@ -158,24 +159,39 @@ export async function GET(req: NextRequest) {
   const toMonthKey = to.slice(0, 7)
   const monthInRange = (key: string) => key >= fromMonthKey && key <= toMonthKey
 
-  // Revenue by month (paid invoices - credit notes per month), limitée à la période
-  const revenueByMonth: Record<string, number> = {}
   const [fromY, fromM] = fromMonthKey.split('-').map(Number)
   const [toY, toM] = toMonthKey.split('-').map(Number)
   const start = fromY * 12 + (fromM - 1)
   const end = toY * 12 + (toM - 1)
+
+  // Factures payées par mois (brut, sans déduction avoirs)
+  const paidInvoicesByMonth: Record<string, number> = {}
   for (let i = start; i <= end; i++) {
     const y = Math.floor(i / 12)
     const m = (i % 12) + 1
-    revenueByMonth[`${y}-${String(m).padStart(2, '0')}`] = 0
+    paidInvoicesByMonth[`${y}-${String(m).padStart(2, '0')}`] = 0
   }
   allInvoicesForCharts.forEach((inv) => {
     if (!inv.paidAt) return
     const key = inv.paidAt.toISOString().slice(0, 7)
     if (!monthInRange(key)) return
-    if (!revenueByMonth[key]) revenueByMonth[key] = 0
-    revenueByMonth[key] += inv.totalTTC
+    paidInvoicesByMonth[key] += inv.totalTTC
   })
+  const paidInvoicesByMonthArray = Object.entries(paidInvoicesByMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({
+      month,
+      label: MONTH_LABELS[parseInt(month.slice(5), 10) - 1],
+      amount,
+    }))
+
+  // Revenue by month (revenus nets = factures payées - avoirs)
+  const revenueByMonth: Record<string, number> = {}
+  for (let i = start; i <= end; i++) {
+    const y = Math.floor(i / 12)
+    const m = (i % 12) + 1
+    revenueByMonth[`${y}-${String(m).padStart(2, '0')}`] = paidInvoicesByMonth[`${y}-${String(m).padStart(2, '0')}`] ?? 0
+  }
   allCreditNotesForCharts.forEach((cn) => {
     const key = cn.issueDate.slice(0, 7)
     if (!monthInRange(key)) return
@@ -187,7 +203,7 @@ export async function GET(req: NextRequest) {
     .map(([month, amount]) => ({
       month,
       label: MONTH_LABELS[parseInt(month.slice(5), 10) - 1],
-      revenue: Math.max(0, amount),
+      revenue: amount,
     }))
 
   // Revenue by year
@@ -202,7 +218,7 @@ export async function GET(req: NextRequest) {
     revenueByYear[y] = (revenueByYear[y] ?? 0) - cn.totalTTC
   })
   const revenueByYearArray = Object.entries(revenueByYear)
-    .map(([year, revenue]) => ({ year: parseInt(year, 10), revenue: Math.max(0, revenue) }))
+    .map(([year, revenue]) => ({ year: parseInt(year, 10), revenue }))
     .sort((a, b) => a.year - b.year)
 
   // Expenses by month, limitée à la période
@@ -280,6 +296,7 @@ export async function GET(req: NextRequest) {
       netProfitEvolution: netProfitPrev !== 0 ? evolution(netProfit, netProfitPrev) : (netProfit !== 0 ? 100 : null),
     },
     revenueByMonth: revenueByMonthArray,
+    paidInvoicesByMonth: paidInvoicesByMonthArray,
     revenueByYear: revenueByYearArray,
     expensesByMonth: expensesByMonthArray,
     creditNotesByMonth: creditNotesByMonthArray,

@@ -40,6 +40,12 @@ export async function POST(
     include: { client: true, company: true, lines: true },
   })
   if (!quote) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
+  if (quote.status === 'signed') {
+    return NextResponse.json(
+      { error: 'Ce devis est déjà signé. L\'envoi par email n\'est plus possible.' },
+      { status: 400 }
+    )
+  }
 
   const to = (quote.client?.email ?? quote.company?.email ?? '').trim()
   if (!to) {
@@ -61,9 +67,7 @@ export async function POST(
   const emitterProfile = quote.emitterProfileId && profilesList.length > 0
     ? profilesList.find((p) => p.id === quote.emitterProfileId)
     : null
-  const companyName = emitterProfile?.companyName?.trim()
-    || (settings.companyName ?? '').trim()
-    || 'Mon entreprise'
+  const companyName = (emitterProfile?.companyName?.trim() || (settings.companyName ?? '').trim() || 'Mon entreprise').trim() || 'Mon entreprise'
   const amountStr = `${quote.totalTTC.toFixed(2)} ${quote.currency}`
 
   // Nouveau token à chaque envoi : si le devis avait déjà été envoyé, l'ancien lien de signature devient invalide
@@ -100,7 +104,7 @@ export async function POST(
 
   const result = await sendMail({
     to,
-    subject: `Devis de la part de ${companyName} – Signature demandée`,
+    subject: `Devis ${quote.number} – ${companyName} (via MyFacturation360)`,
     html,
     action: 'billing-quote-sign-link',
     attachments: [{ filename: `devis-${quote.number}.pdf`, content: pdf, mimeType: 'application/pdf' }],

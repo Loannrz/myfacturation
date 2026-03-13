@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { RotateCcw, Download, Search, Pencil, Trash2 } from 'lucide-react'
+import { RotateCcw, Download, Search, Pencil, Trash2, Send } from 'lucide-react'
 import { UpgradeGate } from '../components/UpgradeGate'
 
 type CreditNote = {
@@ -16,8 +16,8 @@ type CreditNote = {
   reason: string | null
   refundedAt: string | null
   invoice: { number: string } | null
-  client: { firstName: string; lastName: string; companyName: string | null } | null
-  company: { name: string } | null
+  client: { firstName: string; lastName: string; companyName: string | null; email?: string | null } | null
+  company: { name: string; email?: string | null } | null
 }
 
 const statusLabels: Record<string, string> = {
@@ -66,6 +66,45 @@ export default function AvoirsPage() {
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
   const [clientFilter, setClientFilter] = useState('')
   const [companyFilter, setCompanyFilter] = useState('')
+  const [confirmSendCreditNote, setConfirmSendCreditNote] = useState<CreditNote | null>(null)
+  const [sendingId, setSendingId] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
+
+  const clientEmail = (cn: CreditNote): string => {
+    const e = cn.client?.email ?? cn.company?.email
+    return (typeof e === 'string' ? e.trim() : '') || ''
+  }
+
+  const sendCreditNoteEmail = (cn: CreditNote) => {
+    if (!clientEmail(cn)) {
+      setSendError('Veuillez renseigner l\'email du client pour envoyer l\'avoir.')
+      return
+    }
+    setConfirmSendCreditNote(cn)
+  }
+
+  const confirmSendCreditNoteEmail = async () => {
+    const cn = confirmSendCreditNote
+    if (!cn) return
+    setConfirmSendCreditNote(null)
+    const email = clientEmail(cn)
+    if (!email) return
+    setSendError(null)
+    setSendingId(cn.id)
+    try {
+      const res = await fetch(`/api/credit-notes/${cn.id}/send-email`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSendError(data.error || 'L\'email n\'a pas pu être envoyé.')
+        return
+      }
+      setCreditNotes((prev) => prev.map((c) => (c.id === cn.id ? { ...c, status: 'sent' } : c)))
+    } finally {
+      setSendingId(null)
+    }
+  }
+
+  const cancelSendCreditNote = () => setConfirmSendCreditNote(null)
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -134,6 +173,26 @@ export default function AvoirsPage() {
   return (
     <UpgradeGate plan={plan as 'starter' | 'pro' | 'business'} requiredPlan="pro" title="Avoirs">
     <div className="max-w-5xl mx-auto">
+      {confirmSendCreditNote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="confirm-send-cn-title">
+          <div className="bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-xl max-w-sm w-full p-5">
+            <p id="confirm-send-cn-title" className="text-sm text-[var(--foreground)]">
+              Vous êtes sûr d&apos;envoyer l&apos;avoir à cette adresse email&nbsp;:
+            </p>
+            <p className="mt-2 text-lg font-semibold text-[var(--foreground)] break-all">{clientEmail(confirmSendCreditNote)}</p>
+            <p className="mt-2 text-xs text-[var(--muted)]">L&apos;avoir sera joint au mail (PDF).</p>
+            <div className="mt-5 flex gap-3 justify-end">
+              <button type="button" onClick={cancelSendCreditNote} className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">Non</button>
+              <button type="button" onClick={() => confirmSendCreditNoteEmail()} className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">Oui</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sendError && (
+        <div className="mb-4 p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-sm">{sendError}</div>
+      )}
+
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Avoirs</h1>
         <p className="text-[var(--muted)] text-sm mt-1">Les avoirs réduisent le chiffre d&apos;affaires (factures payées − avoirs). Pour en créer un, utilisez la catégorie &laquo;&nbsp;Créer&nbsp;&raquo; dans le menu.</p>
@@ -237,6 +296,16 @@ export default function AvoirsPage() {
                     <td className="p-3">{cn.invoice ? cn.invoice.number : '—'}</td>
                     <td className="p-3 text-right">{cn.totalTTC.toFixed(2)} {cn.currency}</td>
                     <td className="p-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => sendCreditNoteEmail(cn)}
+                        disabled={!!sendingId || !clientEmail(cn)}
+                        title={!clientEmail(cn) ? 'Veuillez renseigner l\'email du client.' : 'Envoyer l\'avoir par email (PDF en pièce jointe)'}
+                        className="inline-flex items-center gap-1 p-2 rounded-lg text-[var(--muted)] hover:bg-[var(--border)]/30 hover:text-[var(--foreground)] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span className="hidden sm:inline">Envoyer</span>
+                      </button>
                       <Link href={`/avoirs/${cn.id}/modifier`} className="inline-flex items-center gap-1 p-2 rounded-lg text-[var(--muted)] hover:bg-[var(--border)]/30 hover:text-[var(--foreground)]" title="Modifier">
                         <Pencil className="w-4 h-4" />
                       </Link>

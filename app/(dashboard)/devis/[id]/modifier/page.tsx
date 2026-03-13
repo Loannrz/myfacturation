@@ -131,6 +131,7 @@ export default function ModifierDevisPage() {
   const hasRecipientEmail = recipientEmail().length > 0
 
   const handleSendQuote = async () => {
+    if (status === 'signed') return
     if (!hasRecipientEmail) {
       setSendQuoteError('Veuillez renseigner l\'email du client pour envoyer le devis.')
       return
@@ -401,8 +402,8 @@ export default function ModifierDevisPage() {
             <button
               type="button"
               onClick={handleSendQuote}
-              disabled={sendingQuote || !hasRecipientEmail}
-              title={!hasRecipientEmail ? 'Veuillez renseigner l\'email du client pour envoyer le devis.' : 'Envoyer le devis par email (lien de signature)'}
+              disabled={sendingQuote || !hasRecipientEmail || status === 'signed'}
+              title={status === 'signed' ? 'Devis déjà signé, envoi impossible.' : !hasRecipientEmail ? 'Veuillez renseigner l\'email du client pour envoyer le devis.' : 'Envoyer le devis par email (lien de signature)'}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] font-medium hover:bg-[var(--border)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />

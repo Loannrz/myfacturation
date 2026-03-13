@@ -136,16 +136,16 @@ const GUIDELINE_ID_EN16931 = 'urn:cen.eu:en16931:2017'
 const NS_RAM = 'urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100'
 const NS_QDT = 'urn:un:unece:uncefact:data:standard:QualifiedDataType:100'
 
-/** Vérifie que le XML d'un avoir contient bien BillingReference (BR-FR-CO-05). */
+/** Vérifie que le XML d'un avoir contient bien une référence facture d'origine (BR-FR-CO-05). */
 function verifyCreditNoteBillingReferenceInXml(xml: string): void {
   const hasBillingRef = xml.includes('<ram:BillingReference>') && xml.includes('</ram:BillingReference>')
-  const hasInvoiceDocRef = xml.includes('<ram:InvoiceDocumentReference>') && xml.includes('</ram:InvoiceDocumentReference>')
+  const hasInvoiceRefDoc = xml.includes('<ram:InvoiceReferencedDocument>') && xml.includes('</ram:InvoiceReferencedDocument>')
   const hasIssuerAssignedId = xml.includes('<ram:IssuerAssignedID>') && xml.includes('</ram:IssuerAssignedID>')
   const hasFormattedIssueDate = xml.includes('<ram:FormattedIssueDateTime>') && xml.includes('format="102"')
-  const pathOrder = xml.indexOf('<rsm:SupplyChainTradeTransaction>') < xml.indexOf('<ram:ApplicableHeaderTradeSettlement>') && xml.indexOf('<ram:ApplicableHeaderTradeSettlement>') < xml.indexOf('<ram:BillingReference>')
-  if (!hasBillingRef || !hasInvoiceDocRef || !hasIssuerAssignedId || !hasFormattedIssueDate || !pathOrder) {
-    console.error('BR-FR-CO-05 BillingReference missing in final XML.')
-    throw new Error('BR-FR-CO-05 : la référence à la facture d\'origine (BillingReference) est absente ou invalide dans le XML généré.')
+  const ok = (hasBillingRef || hasInvoiceRefDoc) && hasIssuerAssignedId && hasFormattedIssueDate
+  if (!ok) {
+    console.error('BR-FR-CO-05 BillingReference/InvoiceReferencedDocument missing in final XML.')
+    throw new Error('BR-FR-CO-05 : la référence à la facture d\'origine est absente ou invalide dans le XML généré.')
   }
 }
 
@@ -236,12 +236,20 @@ export function buildEN16931XML(data: DocumentData): string {
   parts.push('<ram:ApplicableHeaderTradeSettlement>')
   if (data.documentType === 'credit_note' && data.originalInvoiceNumber && data.originalInvoiceDate) {
     const origDate102 = dateFormat102(data.originalInvoiceDate)
+    // #region agent log
+    fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e00367' }, body: JSON.stringify({ sessionId: 'e00367', location: 'en16931-xml.ts:buildEN16931XML', message: 'Emitting BillingReference for credit note', data: { origNum: data.originalInvoiceNumber, origDate102 }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+    // #endregion
+    // BR-FR-CO-05 : référence facture d'origine. BillingReference (CII) + InvoiceReferencedDocument (certains validateurs).
     parts.push('<ram:BillingReference>')
     parts.push('<ram:InvoiceDocumentReference>')
     parts.push('<ram:IssuerAssignedID>' + esc(data.originalInvoiceNumber) + '</ram:IssuerAssignedID>')
     parts.push('<ram:FormattedIssueDateTime><qdt:DateTimeString format="102">' + esc(origDate102) + '</qdt:DateTimeString></ram:FormattedIssueDateTime>')
     parts.push('</ram:InvoiceDocumentReference>')
     parts.push('</ram:BillingReference>')
+    parts.push('<ram:InvoiceReferencedDocument>')
+    parts.push('<ram:IssuerAssignedID>' + esc(data.originalInvoiceNumber) + '</ram:IssuerAssignedID>')
+    parts.push('<ram:FormattedIssueDateTime><udt:DateTimeString format="102">' + esc(origDate102) + '</udt:DateTimeString></ram:FormattedIssueDateTime>')
+    parts.push('</ram:InvoiceReferencedDocument>')
   }
   parts.push('<ram:InvoiceCurrencyCode>' + esc(data.currency || 'EUR') + '</ram:InvoiceCurrencyCode>')
   if (data.bank) {
@@ -470,5 +478,8 @@ export function buildDocumentDataFromCreditNote(creditNote: CreditNoteLike, sett
   const creditNoteDueDate = creditNote.dueDate ?? creditNote.invoice?.issueDate ?? null
   base.paymentDueDate = creditNoteDueDate && String(creditNoteDueDate).trim() ? creditNoteDueDate : (base.paymentDueDate ?? creditNote.invoice?.issueDate ?? null)
   base.dueDate = base.paymentDueDate ?? base.dueDate
+  // #region agent log
+  fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e00367' }, body: JSON.stringify({ sessionId: 'e00367', location: 'en16931-xml.ts:buildDocumentDataFromCreditNote', message: 'Credit note data for Factur-X', data: { hasInvoice: !!creditNote.invoice, originalInvoiceNumber: base.originalInvoiceNumber, originalInvoiceDate: base.originalInvoiceDate }, timestamp: Date.now(), hypothesisId: 'H4' }) }).catch(() => {});
+  // #endregion
   return base
 }

@@ -24,11 +24,25 @@ export async function GET() {
     orderBy: { signedAt: 'desc' },
   })
 
+  const quoteIds = quotes.map((q) => q.id)
+  const invoicesFromQuotes = quoteIds.length > 0
+    ? await prisma.invoice.findMany({
+        where: { quoteId: { in: quoteIds }, userId: session.id },
+        select: { quoteId: true, id: true, number: true },
+      })
+    : []
+  const invoiceByQuoteId = Object.fromEntries(invoicesFromQuotes.map((inv) => [inv.quoteId!, { id: inv.id, number: inv.number }]))
+
   return NextResponse.json(
-    quotes.map((q) => ({
-      id: q.id,
-      number: q.number,
-      signedAt: q.signedAt?.toISOString() ?? null,
-    }))
+    quotes.map((q) => {
+      const inv = invoiceByQuoteId[q.id]
+      return {
+        id: q.id,
+        number: q.number,
+        signedAt: q.signedAt?.toISOString() ?? null,
+        invoiceId: inv?.id ?? null,
+        invoiceNumber: inv?.number ?? null,
+      }
+    })
   )
 }

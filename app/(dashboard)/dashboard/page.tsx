@@ -121,7 +121,7 @@ export default function DashboardPage() {
   const [limitPopupType, setLimitPopupType] = useState<'invoices' | 'quotes'>('invoices')
   const [employeesCount, setEmployeesCount] = useState<number | null>(null)
   const [dashboardMessages, setDashboardMessages] = useState<{ id: string; icon: string; title: string; body: string }[]>([])
-  const [recentlySignedQuotes, setRecentlySignedQuotes] = useState<{ id: string; number: string; signedAt: string | null }[]>([])
+  const [recentlySignedQuotes, setRecentlySignedQuotes] = useState<{ id: string; number: string; signedAt: string | null; invoiceId: string | null; invoiceNumber: string | null }[]>([])
   const [dismissedSignedIds, setDismissedSignedIds] = useState<Set<string>>(new Set())
 
   const query = useMemo(() => {
@@ -443,13 +443,22 @@ export default function DashboardPage() {
                     <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                       <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="font-semibold text-emerald-800 dark:text-emerald-200">
                         Votre devis {q.number} a été signé{signedDate ? ` le ${signedDate}` : ''}.
                       </p>
-                      <p className="text-sm text-emerald-700 dark:text-emerald-300">
-                        Le document signé a été envoyé par email. Ce message reste affiché 1 semaine ou jusqu’à fermeture.
-                      </p>
+                      {q.invoiceId && q.invoiceNumber ? (
+                        <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
+                          Votre facture a été créée suite à la signature du devis {q.number}.{' '}
+                          <Link href={`/factures/${q.invoiceId}/modifier?fromQuoteSign=1`} className="font-medium underline hover:no-underline">
+                            Cliquer pour voir la facture {q.invoiceNumber}
+                          </Link>
+                        </p>
+                      ) : (
+                        <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                          Ce message reste affiché 1 semaine ou jusqu’à fermeture.
+                        </p>
+                      )}
                     </div>
                   </div>
                   <button

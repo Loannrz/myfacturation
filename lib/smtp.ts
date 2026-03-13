@@ -30,12 +30,17 @@ function getTransporter() {
   })
 }
 
-/** Exclut les adresses noreply des destinataires (To/CC) — seul l'émetteur (From) peut être noreply. */
+const NOREPLY_MAINFACTURATION = 'noreply@myfacturation360.fr'
+
+/** Exclut les adresses noreply des destinataires (To/CC) — jamais noreply@myfacturation360.fr ni toute adresse contenant "noreply". */
 function filterOutNoreply(emails: (string | null | undefined)[]): string[] {
   return emails
     .filter((e): e is string => typeof e === 'string' && e.trim().length > 0)
-    .map((e) => e.trim().toLowerCase())
-    .filter((e) => !e.includes('noreply'))
+    .map((e) => e.trim())
+    .filter((e) => {
+      const lower = e.toLowerCase()
+      return lower !== NOREPLY_MAINFACTURATION && !lower.includes('noreply')
+    })
 }
 
 export async function sendMail(options: {

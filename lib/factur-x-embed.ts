@@ -16,6 +16,9 @@ export async function embedFacturXInPdf(
   data: DocumentData
 ): Promise<Buffer> {
   const xml = buildEN16931XML(data)
+  // #region agent log
+  fetch('http://127.0.0.1:7447/ingest/6a373d2b-7fa3-4ca7-b8ba-3aa5dfb24e88', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e00367' }, body: JSON.stringify({ sessionId: 'e00367', location: 'factur-x-embed.ts:embedFacturXInPdf', message: 'XML before embed', data: { xmlLength: xml.length, hasBillingReference: xml.includes('<ram:BillingReference>'), hasInvoiceReferencedDocument: xml.includes('<ram:InvoiceReferencedDocument>'), documentType: data.documentType }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+  // #endregion
   const result = await embedFacturX({
     pdf: pdfBuffer,
     xml,
