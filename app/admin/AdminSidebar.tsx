@@ -18,11 +18,13 @@ import {
   MailX,
   Menu,
   X,
+  LayoutList,
 } from 'lucide-react'
 
 const adminNav = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/users', label: 'Utilisateurs', icon: Users },
+  { href: '/admin/dashboard-messages', label: 'Messages dashboard', icon: LayoutList },
   { href: '/admin/deleted-emails', label: 'Emails supprimés', icon: MailX },
   { href: '/admin/subscriptions', label: 'Abonnements', icon: CreditCard },
   { href: '/admin/invoices', label: 'Factures', icon: FileText },

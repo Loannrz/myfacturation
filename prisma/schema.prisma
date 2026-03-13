@@ -426,6 +426,18 @@ model SystemEvent {
   @@index([createdAt])
 }
 
+// Messages affichés sur le dashboard utilisateur (gérés par l'admin, 0 à 10 actifs)
+model DashboardMessage {
+  id        String   @id @default(cuid())
+  icon      String   // nom Lucide : FileCheck, Shield, etc.
+  title     String   @db.Text
+  body      String   @db.Text
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // Log des emails envoyés (transactionnels, etc.) pour le dashboard admin
 model EmailLog {
   id          String   @id @default(cuid())

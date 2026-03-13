@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { FileText, Receipt, FileMinus, AlertCircle, Info, Lock, AlertTriangle, UserCircle, Wallet, FileCheck } from 'lucide-react'
+import { FileText, Receipt, FileMinus, AlertCircle, Info, Lock, AlertTriangle, UserCircle, Wallet, CheckCircle, X } from 'lucide-react'
+import { getDashboardMessageIcon } from '@/lib/dashboard-message-icons'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
 import {
   AreaChart,
@@ -119,6 +120,9 @@ export default function DashboardPage() {
   const [limitPopupOpen, setLimitPopupOpen] = useState(false)
   const [limitPopupType, setLimitPopupType] = useState<'invoices' | 'quotes'>('invoices')
   const [employeesCount, setEmployeesCount] = useState<number | null>(null)
+  const [dashboardMessages, setDashboardMessages] = useState<{ id: string; icon: string; title: string; body: string }[]>([])
+  const [recentlySignedQuotes, setRecentlySignedQuotes] = useState<{ id: string; number: string; signedAt: string | null }[]>([])
+  const [dismissedSignedIds, setDismissedSignedIds] = useState<Set<string>>(new Set())
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
@@ -223,6 +227,43 @@ export default function DashboardPage() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [fetchStats])
 
+  useEffect(() => {
+    fetch('/api/dashboard-messages')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setDashboardMessages(Array.isArray(data) ? data : []))
+      .catch(() => setDashboardMessages([]))
+  }, [])
+
+  const DISMISSED_SIGNED_KEY = 'dashboard_dismissed_signed_quote_ids'
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(DISMISSED_SIGNED_KEY) : null
+      const arr = raw ? (JSON.parse(raw) as unknown) : []
+      setDismissedSignedIds(new Set(Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : []))
+    } catch {
+      setDismissedSignedIds(new Set())
+    }
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/quotes/recently-signed')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setRecentlySignedQuotes(Array.isArray(data) ? data : []))
+      .catch(() => setRecentlySignedQuotes([]))
+  }, [])
+
+  const dismissSignedNotification = useCallback((quoteId: string) => {
+    setDismissedSignedIds((prev) => {
+      const next = new Set(prev)
+      next.add(quoteId)
+      try {
+        if (typeof window !== 'undefined') localStorage.setItem(DISMISSED_SIGNED_KEY, JSON.stringify([...next]))
+      } catch {}
+      return next
+    })
+  }, [])
+
   const periodLabel = useMemo(() => {
     if (from && to) return `${from} → ${to}`
     if (month !== '') return `${MONTHS[month]} ${year}`
@@ -254,20 +295,30 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Factures électroniques conformes — atout du site */}
-      <div className="mb-6 p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-            <FileCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div>
-            <p className="font-semibold text-emerald-800 dark:text-emerald-200">Factures et avoirs électroniques conformes</p>
-            <p className="text-sm text-emerald-700 dark:text-emerald-300">
-              Factur-X / EN16931 — compatibles à 100 % pour les TPE, auto-entrepreneurs, associations et particuliers. Inclus dans toutes les formules.
-            </p>
-          </div>
+      {/* Messages dashboard (configurés par l’admin) */}
+      {dashboardMessages.length > 0 && (
+        <div className="mb-6 space-y-4">
+          {dashboardMessages.map((msg) => {
+            const IconComponent = getDashboardMessageIcon(msg.icon)
+            return (
+              <div
+                key={msg.id}
+                className="p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 flex flex-wrap items-center gap-4"
+              >
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                    <IconComponent className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-emerald-800 dark:text-emerald-200">{msg.title}</p>
+                    <p className="text-sm text-emerald-700 dark:text-emerald-300">{msg.body}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
-      </div>
+      )}
 
       {/* Filtres */}
       <div className="mb-6 p-4 rounded-xl border border-[var(--border)] bg-[var(--background)]">
@@ -377,6 +428,41 @@ export default function DashboardPage() {
           )}
 
           <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">{periodLabel}</h2>
+
+          {/* Notification(s) devis signé(s) — visibles 1 semaine ou jusqu’au clic sur la croix */}
+          {recentlySignedQuotes
+            .filter((q) => !dismissedSignedIds.has(q.id))
+            .map((q) => {
+              const signedDate = q.signedAt ? new Date(q.signedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''
+              return (
+                <div
+                  key={q.id}
+                  className="mb-4 p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 flex flex-wrap items-center gap-4"
+                >
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-emerald-800 dark:text-emerald-200">
+                        Votre devis {q.number} a été signé{signedDate ? ` le ${signedDate}` : ''}.
+                      </p>
+                      <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                        Le document signé a été envoyé par email. Ce message reste affiché 1 semaine ou jusqu’à fermeture.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => dismissSignedNotification(q.id)}
+                    className="ml-auto p-2 rounded-lg hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                    aria-label="Fermer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              )
+            })}
 
           {/* Retard de paiement + Factures en retard OU CA */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">

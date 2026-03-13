@@ -102,6 +102,30 @@ async function main() {
     })
   }
   console.log('Plan features created/updated')
+
+  // 4. Messages dashboard (affichés sur le dashboard utilisateur, admin en choisit 0 à 10)
+  const existingCount = await prisma.dashboardMessage.count()
+  if (existingCount === 0) {
+    const defaultMessages = [
+      { icon: 'FileCheck', title: 'Factures et avoirs électroniques conformes', body: 'Factur-X / EN16931 — compatibles à 100 % pour les TPE, auto-entrepreneurs, associations et particuliers. Inclus dans toutes les formules.', sortOrder: 0 },
+      { icon: 'Shield', title: 'Données sécurisées', body: 'Vos données sont hébergées en France et protégées. Sauvegardes régulières et conformité RGPD.', sortOrder: 1 },
+      { icon: 'Zap', title: 'Gain de temps', body: 'Créez devis et factures en quelques clics. Conversion devis → facture en un clic.', sortOrder: 2 },
+      { icon: 'BarChart3', title: 'Tableau de bord', body: 'Vue d\'ensemble de votre activité : CA, encaissements, impayés et graphiques par période.', sortOrder: 3 },
+      { icon: 'Users', title: 'Multi-utilisateurs (formule Business)', body: 'Ajoutez des employés, gérez les dépenses et le temps par collaborateur.', sortOrder: 4 },
+      { icon: 'Building2', title: 'Multi-établissements', body: 'Plusieurs établissements ou sièges : facturation et paramètres par établissement (formules Pro et Business).', sortOrder: 5 },
+      { icon: 'Wallet', title: 'Multi comptes bancaires', body: 'Ventilez vos encaissements par compte bancaire pour une comptabilité claire (formules Pro et Business).', sortOrder: 6 },
+      { icon: 'FileSpreadsheet', title: 'Exports et comptabilité', body: 'Export comptable, suivi des dépenses et historique d\'activité pour garder la main sur vos chiffres.', sortOrder: 7 },
+      { icon: 'Mail', title: 'Envoi par email', body: 'Envoyez devis et factures par email directement depuis l\'application. Suivi des envois.', sortOrder: 8 },
+      { icon: 'CheckCircle', title: 'Devis signables en ligne', body: 'Envoyez un lien de signature électronique à vos clients. Recevez le devis signé par email.', sortOrder: 9 },
+    ]
+    for (const m of defaultMessages) {
+      await prisma.dashboardMessage.create({ data: { ...m, isActive: false } })
+    }
+    // Activer le premier par défaut pour affichage immédiat
+    const first = await prisma.dashboardMessage.findFirst({ where: { sortOrder: 0 } })
+    if (first) await prisma.dashboardMessage.update({ where: { id: first.id }, data: { isActive: true } })
+    console.log('Dashboard messages created (10), 1 active by default')
+  }
 }
 
 main()
