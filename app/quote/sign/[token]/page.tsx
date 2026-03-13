@@ -1,0 +1,298 @@
+'use client'
+
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useParams } from 'next/navigation'
+
+type QuoteLine = { description: string; quantity: number; unitPrice: number; vatRate: number; discount: number; total: number }
+type QuoteData = {
+  id: string
+  number: string
+  status: string
+  issueDate: string
+  dueDate: string | null
+  currency: string
+  totalHT: number
+  vatAmount: number
+  totalTTC: number
+  client: { firstName: string; lastName: string; companyName: string | null; email: string } | null
+  company: { name: string; legalName: string | null; email: string | null } | null
+  lines: QuoteLine[]
+}
+
+function formatDate(d: string | null): string {
+  if (!d) return '—'
+  const [y, m, day] = d.split('-')
+  return `${day}/${m}/${y}`
+}
+
+function lineTotal(line: QuoteLine): number {
+  const q = Number(line.quantity) || 0
+  const pu = Number(line.unitPrice) || 0
+  const vat = Number(line.vatRate) ?? 0
+  const rem = Number(line.discount) ?? 0
+  return q * pu * (1 - rem / 100) * (1 + vat / 100)
+}
+
+export default function QuoteSignPage() {
+  const params = useParams()
+  const token = typeof params?.token === 'string' ? params.token : ''
+  const [quote, setQuote] = useState<QuoteData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [signing, setSigning] = useState(false)
+  const [signed, setSigned] = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const drawingRef = useRef(false)
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null)
+
+  useEffect(() => {
+    if (!token) {
+      setError('Lien invalide')
+      setLoading(false)
+      return
+    }
+    fetch(`/api/quote/sign/${encodeURIComponent(token)}`)
+      .then((r) => {
+        if (!r.ok) {
+          if (r.status === 410) return r.json().then((d) => { throw new Error(d.error || 'Déjà signé') })
+          if (r.status === 404) throw new Error('Devis introuvable')
+          throw new Error('Erreur de chargement')
+        }
+        return r.json()
+      })
+      .then(setQuote)
+      .catch((e) => setError(e.message || 'Devis introuvable'))
+      .finally(() => setLoading(false))
+  }, [token])
+
+  const clearCanvas = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.strokeStyle = '#1a1a1a'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+  }, [])
+
+  useEffect(() => {
+    if (!quote || quote.status === 'signed') return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const dpr = window.devicePixelRatio || 1
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = Math.round(rect.width * dpr)
+    canvas.height = Math.round(rect.height * dpr)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.scale(dpr, dpr)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, rect.width, rect.height)
+    ctx.strokeStyle = '#1a1a1a'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+  }, [quote])
+
+  const getCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const rect = canvas.getBoundingClientRect()
+    if ('touches' in e) {
+      const t = e.touches[0]
+      return t ? { x: t.clientX - rect.left, y: t.clientY - rect.top } : null
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  }, [])
+
+  const startDraw = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    const pos = getCoords(e)
+    if (pos) {
+      drawingRef.current = true
+      lastPosRef.current = pos
+      const ctx = canvasRef.current?.getContext('2d')
+      if (ctx) {
+        ctx.beginPath()
+        ctx.moveTo(pos.x, pos.y)
+      }
+    }
+  }, [getCoords])
+
+  const moveDraw = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    if (!drawingRef.current) return
+    const pos = getCoords(e)
+    if (!pos) return
+    const ctx = canvasRef.current?.getContext('2d')
+    if (ctx) {
+      ctx.lineTo(pos.x, pos.y)
+      ctx.stroke()
+    }
+    lastPosRef.current = pos
+  }, [getCoords])
+
+  const endDraw = useCallback(() => {
+    drawingRef.current = false
+    lastPosRef.current = null
+  }, [])
+
+  const submitSignature = useCallback(() => {
+    if (!token || !quote || quote.status === 'signed') return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const dataUrl = canvas.toDataURL('image/png')
+    const blank = document.createElement('canvas')
+    blank.width = canvas.width
+    blank.height = canvas.height
+    const blankCtx = blank.getContext('2d')
+    if (blankCtx) {
+      blankCtx.fillStyle = '#ffffff'
+      blankCtx.fillRect(0, 0, blank.width, blank.height)
+    }
+    if (dataUrl === blank.toDataURL('image/png')) {
+      alert('Veuillez signer dans la zone ci-dessous avant de valider.')
+      return
+    }
+    setSigning(true)
+    fetch(`/api/quote/sign/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signatureDataUrl: dataUrl }),
+    })
+      .then((r) => {
+        if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Erreur') })
+        return r.json()
+      })
+      .then(() => setSigned(true))
+      .catch((e) => alert(e.message || 'Erreur lors de l\'enregistrement de la signature'))
+      .finally(() => setSigning(false))
+  }, [token, quote])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+        <p className="text-[var(--muted)]">Chargement du devis…</p>
+      </div>
+    )
+  }
+  if (error || !quote) {
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+        <div className="text-center">
+          <p className="text-red-600 dark:text-red-400 font-medium">{error || 'Devis introuvable'}</p>
+          <p className="text-sm text-[var(--muted)] mt-2">Ce lien est invalide ou ce devis a déjà été signé.</p>
+        </div>
+      </div>
+    )
+  }
+  if (signed) {
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <p className="text-emerald-600 dark:text-emerald-400 font-semibold text-lg">Devis signé avec succès</p>
+          <p className="text-[var(--muted)] mt-2">L&apos;émetteur a été notifié et recevra le devis signé par email.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const clientName = quote.company
+    ? (quote.company.legalName || quote.company.name)
+    : quote.client
+      ? [quote.client.firstName, quote.client.lastName].filter(Boolean).join(' ') || quote.client.companyName || 'Client'
+      : 'Client'
+
+  return (
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] p-4 md:p-8">
+      <div className="max-w-2xl mx-auto space-y-8">
+        <h1 className="text-2xl font-semibold">Consulter et signer le devis</h1>
+
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-6">
+          <h2 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wide mb-4">Devis n° {quote.number}</h2>
+          <div className="grid grid-cols-2 gap-4 text-sm mb-6">
+            <div>
+              <p className="text-[var(--muted)]">Date d&apos;émission</p>
+              <p className="font-medium">{formatDate(quote.issueDate)}</p>
+            </div>
+            <div>
+              <p className="text-[var(--muted)]">Échéance</p>
+              <p className="font-medium">{formatDate(quote.dueDate)}</p>
+            </div>
+            <div>
+              <p className="text-[var(--muted)]">Destinataire</p>
+              <p className="font-medium">{clientName}</p>
+            </div>
+            <div>
+              <p className="text-[var(--muted)]">Montant total TTC</p>
+              <p className="font-medium">{quote.totalTTC.toFixed(2)} {quote.currency}</p>
+            </div>
+          </div>
+          <div className="border-t border-[var(--border)] pt-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[var(--muted)] text-left">
+                  <th className="pb-2 font-medium">Description</th>
+                  <th className="pb-2 font-medium text-right">Qté</th>
+                  <th className="pb-2 font-medium text-right">P.U.</th>
+                  <th className="pb-2 font-medium text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quote.lines.map((line, i) => (
+                  <tr key={i} className="border-t border-[var(--border)]/50">
+                    <td className="py-2 pr-2">{line.description || '—'}</td>
+                    <td className="py-2 text-right">{line.quantity}</td>
+                    <td className="py-2 text-right">{(Number(line.unitPrice) || 0).toFixed(2)} €</td>
+                    <td className="py-2 text-right font-medium">{lineTotal(line).toFixed(2)} €</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-right font-semibold mt-2">Total TTC : {quote.totalTTC.toFixed(2)} {quote.currency}</p>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-6">
+          <h2 className="text-sm font-medium text-[var(--foreground)] mb-3">Signature</h2>
+          <p className="text-sm text-[var(--muted)] mb-4">Signez dans la zone ci-dessous (doigt, stylet ou souris).</p>
+          <div
+            className="border-2 border-dashed border-[var(--border)] rounded-lg bg-white overflow-hidden touch-none"
+            style={{ minHeight: 120 }}
+          >
+            <canvas
+              ref={canvasRef}
+              className="block w-full h-[120px] cursor-crosshair"
+              onMouseDown={startDraw}
+              onMouseMove={moveDraw}
+              onMouseUp={endDraw}
+              onMouseLeave={endDraw}
+              onTouchStart={startDraw}
+              onTouchMove={moveDraw}
+              onTouchEnd={endDraw}
+              style={{ touchAction: 'none' }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-3 mt-4">
+            <button
+              type="button"
+              onClick={clearCanvas}
+              className="px-4 py-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--border)]/20"
+            >
+              Effacer
+            </button>
+            <button
+              type="button"
+              onClick={submitSignature}
+              disabled={signing}
+              className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {signing ? 'Enregistrement…' : 'Signer le devis'}
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Send } from 'lucide-react'
 import { roundDownTo2Decimals } from '@/lib/billing-utils'
 import { InvoiceQuotePreview } from '../../../_components/InvoiceQuotePreview'
 
@@ -14,8 +14,8 @@ export default function ModifierDevisPage() {
   const router = useRouter()
   const params = useParams()
   const id = params?.id as string
-  const [clients, setClients] = useState<{ id: string; firstName: string; lastName: string; companyName: string | null }[]>([])
-  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [clients, setClients] = useState<{ id: string; firstName: string; lastName: string; companyName: string | null; email?: string }[]>([])
+  const [companies, setCompanies] = useState<{ id: string; name: string; email?: string | null }[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingQuote, setLoadingQuote] = useState(true)
@@ -34,6 +34,8 @@ export default function ModifierDevisPage() {
   const [emitterProfiles, setEmitterProfiles] = useState<{ id: string; name: string; companyName: string }[]>([])
   const [emitterProfileId, setEmitterProfileId] = useState('')
   const [status, setStatus] = useState('draft')
+  const [sendingQuote, setSendingQuote] = useState(false)
+  const [sendQuoteError, setSendQuoteError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -119,6 +121,33 @@ export default function ModifierDevisPage() {
     ? (clients.find((c) => c.id === clientId) ? [clients.find((c) => c.id === clientId)!.firstName, clients.find((c) => c.id === clientId)!.lastName].filter(Boolean).join(' ') || clients.find((c) => c.id === clientId)!.companyName || '' : '')
     : companyId ? (companies.find((c) => c.id === companyId)?.name ?? '') : ''
 
+  const recipientEmail = (): string => {
+    if (clientId) return (clients.find((c) => c.id === clientId)?.email ?? '').trim()
+    if (companyId) return (companies.find((c) => c.id === companyId)?.email ?? '').trim()
+    return ''
+  }
+  const hasRecipientEmail = recipientEmail().length > 0
+
+  const handleSendQuote = async () => {
+    if (!hasRecipientEmail) {
+      setSendQuoteError('Veuillez renseigner l\'email du client pour envoyer le devis.')
+      return
+    }
+    setSendQuoteError(null)
+    setSendingQuote(true)
+    try {
+      const res = await fetch(`/api/quotes/${id}/send-email`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSendQuoteError(data.error || 'L\'email n\'a pas pu être distribué. Vérifiez que l\'adresse du client est valide.')
+        return
+      }
+      setStatus('sent')
+    } finally {
+      setSendingQuote(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -183,6 +212,12 @@ export default function ModifierDevisPage() {
       </Link>
       <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-2">Modifier le devis</h1>
       <p className="text-sm text-[var(--muted)] mb-6">Consultez l&apos;aperçu en bas.</p>
+
+      {sendQuoteError && (
+        <div className="mb-6 p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-sm">
+          {sendQuoteError}
+        </div>
+      )}
 
       <div className="space-y-8">
         <form
@@ -337,9 +372,19 @@ export default function ModifierDevisPage() {
             </div>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-medium hover:opacity-90 disabled:opacity-50">
               {loading ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSendQuote}
+              disabled={sendingQuote || !hasRecipientEmail}
+              title={!hasRecipientEmail ? 'Veuillez renseigner l\'email du client pour envoyer le devis.' : 'Envoyer le devis par email (lien de signature)'}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] font-medium hover:bg-[var(--border)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send className="w-4 h-4" />
+              {sendingQuote ? 'Envoi…' : 'Envoyer le devis'}
             </button>
             <Link href="/devis" className="px-4 py-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] font-medium hover:bg-[var(--border)]/20">
               Annuler

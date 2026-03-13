@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FileText, Download, Search, AlertCircle, Pencil, Trash2 } from 'lucide-react'
+import { FileText, Download, Search, AlertCircle, Pencil, Trash2, Send } from 'lucide-react'
 import { canCreateDocument, CANNOT_CREATE_MESSAGE } from '@/lib/can-create-document'
 
 type Quote = {
@@ -15,8 +15,8 @@ type Quote = {
   issueDate: string
   dueDate: string | null
   signedAt: string | null
-  client: { firstName: string; lastName: string; companyName: string | null } | null
-  company: { name: string } | null
+  client: { firstName: string; lastName: string; companyName: string | null; email?: string } | null
+  company: { name: string; email?: string | null } | null
 }
 
 function formatDateFR(iso: string | null | undefined): string {
@@ -61,6 +61,8 @@ export default function DevisPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showSignedDateFor, setShowSignedDateFor] = useState<string | null>(null)
   const [signedDateValue, setSignedDateValue] = useState(() => new Date().toISOString().slice(0, 10))
+  const [sendingId, setSendingId] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -85,6 +87,32 @@ export default function DevisPage() {
     if (quote.company) return quote.company.name
     if (quote.client) return [quote.client.firstName, quote.client.lastName].filter(Boolean).join(' ') || quote.client.companyName || '—'
     return '—'
+  }
+
+  const clientEmail = (quote: Quote): string => {
+    const e = quote.client?.email ?? quote.company?.email
+    return (typeof e === 'string' ? e.trim() : '') || ''
+  }
+
+  const sendQuoteEmail = async (quote: Quote) => {
+    const email = clientEmail(quote)
+    if (!email) {
+      setSendError('Veuillez renseigner l\'email du client pour envoyer le devis.')
+      return
+    }
+    setSendError(null)
+    setSendingId(quote.id)
+    try {
+      const res = await fetch(`/api/quotes/${quote.id}/send-email`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSendError(data.error || 'L\'email n\'a pas pu être distribué. Vérifiez que l\'adresse du client est valide.')
+        return
+      }
+      setQuotes((prev) => prev.map((qu) => (qu.id === quote.id ? { ...qu, status: 'sent' } : qu)))
+    } finally {
+      setSendingId(null)
+    }
   }
 
   const updateQuoteStatus = async (id: string, status: string, signedDate?: string) => {
@@ -181,6 +209,12 @@ export default function DevisPage() {
         </select>
       </div>
 
+      {sendError && (
+        <div className="mb-4 p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-sm flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {sendError}
+        </div>
+      )}
       <div className="border border-[var(--border)] rounded-xl overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-[var(--muted)]">Chargement…</div>
@@ -251,6 +285,16 @@ export default function DevisPage() {
                   <td className="py-3 px-4 text-sm text-[var(--muted)]">{quote.dueDate || '—'}</td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => sendQuoteEmail(quote)}
+                        disabled={!!sendingId || !clientEmail(quote)}
+                        title={!clientEmail(quote) ? 'Veuillez renseigner l\'email du client pour envoyer le devis.' : 'Envoyer le devis par email'}
+                        className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span className="hidden sm:inline">Envoyer</span>
+                      </button>
                       <Link
                         href={`/devis/${quote.id}/modifier`}
                         className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
