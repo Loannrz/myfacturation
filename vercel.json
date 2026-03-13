@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/weekly-email",
       "schedule": "0 10 * * 1"
-    },
-    {
-      "path": "/api/cron/backup-db",
-      "schedule": "0 */6 * * *"
     }
   ]
 }
