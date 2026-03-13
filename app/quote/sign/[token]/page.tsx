@@ -19,20 +19,6 @@ type QuoteData = {
   lines: QuoteLine[]
 }
 
-function formatDate(d: string | null): string {
-  if (!d) return '—'
-  const [y, m, day] = d.split('-')
-  return `${day}/${m}/${y}`
-}
-
-function lineTotal(line: QuoteLine): number {
-  const q = Number(line.quantity) || 0
-  const pu = Number(line.unitPrice) || 0
-  const vat = Number(line.vatRate) ?? 0
-  const rem = Number(line.discount) ?? 0
-  return q * pu * (1 - rem / 100) * (1 + vat / 100)
-}
-
 export default function QuoteSignPage() {
   const params = useParams()
   const token = typeof params?.token === 'string' ? params.token : ''
@@ -198,60 +184,19 @@ export default function QuoteSignPage() {
     )
   }
 
-  const clientName = quote.company
-    ? (quote.company.legalName || quote.company.name)
-    : quote.client
-      ? [quote.client.firstName, quote.client.lastName].filter(Boolean).join(' ') || quote.client.companyName || 'Client'
-      : 'Client'
-
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] p-4 md:p-8">
-      <div className="max-w-2xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-6">
         <h1 className="text-2xl font-semibold">Consulter et signer le devis</h1>
 
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-6">
-          <h2 className="text-sm font-medium text-[var(--muted)] uppercase tracking-wide mb-4">Devis n° {quote.number}</h2>
-          <div className="grid grid-cols-2 gap-4 text-sm mb-6">
-            <div>
-              <p className="text-[var(--muted)]">Date d&apos;émission</p>
-              <p className="font-medium">{formatDate(quote.issueDate)}</p>
-            </div>
-            <div>
-              <p className="text-[var(--muted)]">Échéance</p>
-              <p className="font-medium">{formatDate(quote.dueDate)}</p>
-            </div>
-            <div>
-              <p className="text-[var(--muted)]">Destinataire</p>
-              <p className="font-medium">{clientName}</p>
-            </div>
-            <div>
-              <p className="text-[var(--muted)]">Montant total TTC</p>
-              <p className="font-medium">{quote.totalTTC.toFixed(2)} {quote.currency}</p>
-            </div>
-          </div>
-          <div className="border-t border-[var(--border)] pt-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[var(--muted)] text-left">
-                  <th className="pb-2 font-medium">Description</th>
-                  <th className="pb-2 font-medium text-right">Qté</th>
-                  <th className="pb-2 font-medium text-right">P.U.</th>
-                  <th className="pb-2 font-medium text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quote.lines.map((line, i) => (
-                  <tr key={i} className="border-t border-[var(--border)]/50">
-                    <td className="py-2 pr-2">{line.description || '—'}</td>
-                    <td className="py-2 text-right">{line.quantity}</td>
-                    <td className="py-2 text-right">{(Number(line.unitPrice) || 0).toFixed(2)} €</td>
-                    <td className="py-2 text-right font-medium">{lineTotal(line).toFixed(2)} €</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="text-right font-semibold mt-2">Total TTC : {quote.totalTTC.toFixed(2)} {quote.currency}</p>
-          </div>
+        <section className="rounded-xl border border-[var(--border)] bg-white overflow-hidden">
+          <p className="text-sm text-[var(--muted)] px-4 py-2 border-b border-[var(--border)]">Devis n° {quote.number}</p>
+          <iframe
+            title="PDF du devis"
+            src={`/api/quote/sign/${encodeURIComponent(token)}/pdf`}
+            className="w-full min-h-[70vh] border-0"
+            style={{ minHeight: '600px' }}
+          />
         </section>
 
         <section className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-6">

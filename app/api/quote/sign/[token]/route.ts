@@ -132,8 +132,9 @@ export async function POST(
   const clientName = getRecipientName(quote)
   const signedAtStr = signedAt.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
 
-  const emitterEmail = quote.user?.email
-  if (emitterEmail && emitterEmail.trim()) {
+  const emitterEmail = (quote.user?.email ?? '').trim()
+  const signerEmail = (quote.client?.email ?? quote.company?.email ?? '').trim()
+  if (emitterEmail || signerEmail) {
     const html = buildQuoteSignedNotificationHtml({
       clientName,
       signedAt: signedAtStr,
@@ -141,7 +142,9 @@ export async function POST(
       companyName,
     })
     await sendMail({
-      to: emitterEmail,
+      from: process.env.QUOTE_SIGNED_EMAIL_FROM || 'noreply@myfacturation360.fr',
+      to: emitterEmail || signerEmail,
+      cc: emitterEmail && signerEmail && emitterEmail !== signerEmail ? [signerEmail] : undefined,
       subject: 'Votre devis a été signé',
       html,
       action: 'quote-signed-notification',
