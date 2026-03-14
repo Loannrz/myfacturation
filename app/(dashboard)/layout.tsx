@@ -23,6 +23,7 @@ import {
   Shield,
   MessageCircle,
   Building2,
+  BookOpen,
 } from 'lucide-react'
 import { useEffect, useState, useRef } from 'react'
 import { canAccessFeatureByPlan, effectiveSubscriptionPlan } from '@/lib/subscription'
@@ -55,6 +56,7 @@ const navSectionDocuments: NavItem[] = [
 ]
 const navSectionAccount: NavItem[] = [
   { href: '/formules', label: 'Formules', icon: Sparkles },
+  { href: '/comment-ca-marche', label: 'Comment ça marche', icon: BookOpen },
   { href: '/parametres', label: 'Paramètres', icon: Settings },
 ]
 const navSections = [navSectionOverview, navSectionDocuments, navSectionAccount]
